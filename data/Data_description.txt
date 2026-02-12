@@ -1,0 +1,14 @@
+Project: Mannose-associated conserved genes in 267 yeast species (CDS/proteins → MSA)
+
+Goal:
+I will analyze 267 yeast species from diverse taxa to identify genes that are conserved in mannose-utilizing species compared with species that do not metabolize mannose. The workflow uses protein/CDS sequences to run quality control, generate ortholog groups (or gene sets), perform multiple sequence alignment (MSA), and compare conservation patterns between the two phenotype groups.
+
+Core idea:
+
+QC protein/CDS/genome inputs
+
+build comparable gene sets across species (e.g., orthogroups or curated genes)
+
+run MSA per gene/orthogroup
+
+quantify conservation and test enrichment in mannose-growers vs non-growers

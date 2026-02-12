@@ -1,0 +1,17 @@
+mkdir -p 09_qc/{assemblies,proteins,msa,raw_reads,logs,results}
+mkdir -p reports/logs
+
+exec > >(tee -a reports/logs/qc_commands.log) 2>&1
+date
+
+shopt -s nullglob
+genomes=(02_subset/genome/*)
+shopt -u nullglob
+if [[ ${#genomes[@]} -eq 0 ]]; then
+  echo "[ERROR] No genome files found in 02_subset/genome/"
+  exit 1
+fi
+
+seqkit stats -a "${genomes[@]}" > 09_qc/assemblies/genome_seqkit_stats.tsv
+head -n 5 09_qc/assemblies/genome_seqkit_stats.tsv
+
