@@ -1,7 +1,7 @@
 ## Project Title: Mannose-associated conserved genes in 267 yeast species (CDS/proteins → MSA)
 **Notebook date:** 2026-02-10
 ### Goal:
-### Use orthogroup-defined gene families (from Orthofinder across 1,154 Y1000+ species) and restrict them to your 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
+To use orthogroup-defined gene families (from Orthofinder across 1,154 Y1000+ species) and restrict them to your 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
 
 ### Core logic:(CDS/proteins → MSA → trimming → gene trees)
 
