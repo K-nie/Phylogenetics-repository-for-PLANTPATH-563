@@ -14,9 +14,7 @@ Each species can contribute 0, 1, or many genes to an OG (gene family / paralogs
 1. QC input sequences (CDS/proteins/genomes as available)
 2. Build comparable gene sets across species (Orthogroups / for curated genes)
 3. **Subset** full Y1000+ orthogroup FASTAs (1,154 species) down to **my 267 species**
-4. Run **MSA per orthogroup** (using MAFFT with the following configurations: for OGs that were small ie <200 sequences, and also skipped OGs with <3 sequecnes. 
-### For large OGs,is chose  --auto selected:FFT-NS-2 (fast progressive method, guide trees built twice) but for small OGs with < with 3 sequences,  used:
-# L-INS-i (--localpair --maxiterate 1000) = highly accurate ). I did this because accuracy is maximized where feasible (small OGs) and computation remains feasible for massive gene families (large OGs)
+4. Run **MSA per orthogroup** (using MAFFT with the following configurations: for OGs that were small ie <200 sequences, and also skipped OGs with <3 sequecnes. For large OGs,is chose  --auto selected:FFT-NS-2 (fast progressive method, guide trees built twice) but for small OGs with < with 3 sequences,  used L-INS-i (--localpair --maxiterate 1000) = highly accurate ). I did this because accuracy is maximized where feasible (small OGs) and computation remains feasible for massive gene families (large OGs)
 5. Trim alignments (TrimAl)
 6. Infer gene trees / model selection / support (IQ-TREE)
 7. Downstream: quantify conservation / enrichment between phenotype groups
