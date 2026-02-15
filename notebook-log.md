@@ -1,28 +1,28 @@
-# Project Title: Mannose-associated conserved genes in 267 yeast species (CDS/proteins → MSA)
+## Project Title: Mannose-associated conserved genes in 267 yeast species (CDS/proteins → MSA)
 **Notebook date:** 2026-02-10
-# Goal:
-# Use orthogroup-defined gene families (from Orthofinder across 1,154 Y1000+ species) and restrict them to your 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
+### Goal:
+### Use orthogroup-defined gene families (from Orthofinder across 1,154 Y1000+ species) and restrict them to your 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
 
-# Core logic:(CDS/proteins → MSA → trimming → gene trees)
+### Core logic:(CDS/proteins → MSA → trimming → gene trees)
 
 1. My ML models identify orthogroups (OGs) associated with mannose phenotype.
 2. An OG is a gene-family “bucket”, it may contain a sinfle gene though. 
 3. Each species can contribute 0, 1, or many genes to a given OG (paralogs happen).Therefore for this analyses, MSA is done per orthogroup, not “per species”.
 Each species can contribute 0, 1, or many genes to an OG (gene family / paralogs).
 
-## Core workflow (per orthogroup)
+### Core workflow (per orthogroup)
 1. QC input sequences (CDS/proteins/genomes as available)
 2. Build comparable gene sets across species (Orthogroups / for curated genes)
 3. **Subset** full Y1000+ orthogroup FASTAs (1,154 species) down to **my 267 species**
 4. Run **MSA per orthogroup** (using MAFFT with the following configurations: for OGs that were small ie <200 sequences, and also skipped OGs with <3 sequecnes. 
-# For large OGs,is chose  --auto selected:FFT-NS-2 (fast progressive method, guide trees built twice) but for small OGs with < with 3 sequences,  used:
+### For large OGs,is chose  --auto selected:FFT-NS-2 (fast progressive method, guide trees built twice) but for small OGs with < with 3 sequences,  used:
 # L-INS-i (--localpair --maxiterate 1000) = highly accurate ). I did this because accuracy is maximized where feasible (small OGs) and computation remains feasible for massive gene families (large OGs)
 5. Trim alignments (TrimAl)
 6. Infer gene trees / model selection / support (IQ-TREE)
 7. Downstream: quantify conservation / enrichment between phenotype groups
 
 
-## Environment setup (conda)
+### Environment setup (conda)
 
 I created a working environment to preevent tools interferring with other system tools:
 
@@ -46,7 +46,7 @@ conda activate phylo_env
 I ran all analyses from the root repository root ( `Phylogenetics-repository-for-PLANTPATH-563`).  
 All paths below are relative to that root.
 
-## Inputs I already have
+### Inputs I already have
 
 - `data/processed/species_267.txt` : list of the 267 species IDs (one per line)
 - `data/processed/03_ml_orthogroups/01_og_lists/orthogroup_list.txt` : **master OG list** (union of my 6 ML models which contained 9 OGs)
@@ -59,7 +59,7 @@ Already created:
 - MAFFT alignments per OG:  
   `data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta`
 
-## Created and verified directories
+### Created and verified directories
 
 ```python
 !mkdir -p data/processed/03_ml_orthogroups/logs
@@ -70,7 +70,7 @@ Already created:
 !ls -lah data/processed/03_ml_orthogroups | sed -n '1,120p'
 ```
 
-## Step A — Subset Orthogroup FASTAs to 267 species (seqkit)
+### Step A — Subset Orthogroup FASTAs to 267 species (seqkit)
 
 This step reads each OG in my `orthogroup_list.txt`, opens the full OG FASTA from Orthofinder (1,154 species),
 and filters sequences whose headers contain **any** species ID from `species_267.txt`.
@@ -150,7 +150,7 @@ chmod +x og_fastas_267.sh
 !tail -n 20 data/processed/03_ml_orthogroups/logs/zero_after_filter.log || true
 ```
 
-## Step B — MAFFT alignments per OG (robust loop)
+### Step B — MAFFT alignments per OG (robust loop)
 
 Safeguards:
 - skip OGs with <3 sequences
@@ -215,7 +215,7 @@ chmod +x mafft_run.sh
 !tail -n 30 data/processed/03_ml_orthogroups/logs/mafft_run.log || true
 ```
 As already indicated, I set FFT-NS-2 with the flag --auto to build trees twice for large OGs and L-INS-i --localpair --maxiterate 1000 for smaller OGs.
-## Step C — Trim alignments with TrimAl (robust + avoids `HISTTIMEFORMAT` unbound errors: I ran into this error and it took some time to troubleshoot it)
+### Step C — Trim alignments with TrimAl (robust + avoids `HISTTIMEFORMAT` unbound errors: I ran into this error and it took some time to troubleshoot it)
 
 You hit an interactive shell error:
 `HISTTIMEFORMAT: unbound variable`
@@ -294,7 +294,7 @@ and avoids subjective hand-tuning of thresholds.
 ```
 
 
-## Step D — Gene trees with IQ-TREE (IQ-TREE 3)
+### Step D — Gene trees with IQ-TREE (IQ-TREE 3)
 
 In my environment, `iqtree2` was not found, but `iqtree3` exists, installed `iqtree3`.
 Use **Ultrafast bootstrap** with **1000 replicates** via `-B 1000`.
@@ -361,13 +361,13 @@ chmod +x iqtree_run.sh
 !tail -n 40 data/processed/03_ml_orthogroups/logs/iqtree_run.log || true
 ```
 
-## Next analysis steps (after gene trees)
+### Next analysis steps (after gene trees)
 
 At this point I have:
 - per-OG trimmed alignments (MSA)
 - per-OG gene trees + bootstrap support
 
-## Next steps  (things I am thinking of doing)
+### Next steps  (things I am thinking of doing)
 
 1. **Define phenotype groups**
    - `mannose-growers` vs `non-growers` (a table mapping species → phenotype)
@@ -389,7 +389,7 @@ At this point I have:
    - choose a set of single-copy OGs, concatenate alignments, infer species tree
    - or use gene-tree methods (ASTRAL) if desired
 
-## Reproducibility checklist
+### Reproducibility checklist
 
 - Keep all key lists under version control:
   - `species_267.txt`
