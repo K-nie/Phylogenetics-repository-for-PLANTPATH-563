@@ -13,6 +13,9 @@ MISSING_LIST="${LOG_DIR}/subset_267_missing.txt"
 
 mkdir -p "${OUT_CDS}" "${LOG_DIR}"
 
+# OPTIONAL but recommended: clear previous subset outputs (not raw data)
+rm -f "${OUT_CDS}/"* 2>/dev/null || true
+
 # Log everything
 exec > >(tee -a "${LOG_FILE}") 2>&1
 
@@ -23,7 +26,7 @@ echo
 
 # Basic checks
 if [[ ! -f "${LIST}" ]]; then
-  echo "[ERROR] Cannot find ${LIST} in the project root."
+  echo "[ERROR] Cannot find species list file: ${LIST}"
   exit 1
 fi
 if [[ ! -d "${TARBALL_DIR}" ]]; then
@@ -35,39 +38,30 @@ fi
 : > "${FOUND_LIST}"
 : > "${MISSING_LIST}"
 
-# Build a filename inventory once (fast)
-# Example tarball names:
-# yHMPu5000026055_diutina_siamensis_170912.final.cds.tar.gz
-mapfile -t ALL_TARS < <(find "${TARBALL_DIR}" -maxdepth 1 -type f -name "*.final.cds.tar.gz" -print)
-
-echo "[INFO] Total tarballs available: ${#ALL_TARS[@]}"
+echo "[INFO] Total tarballs available: $(find "${TARBALL_DIR}" -maxdepth 1 -type f -name "*.final.cds.tar.gz" | wc -l | tr -d ' ')"
 echo
 
-# For each line in species_267.txt, try to find matching tarball(s)
-# We match by substring, so your list can contain:
-#  - full prefix (yHMPu...._species_strain)
-#  - species name fragment (diutina_siamensis)
-#  - exact tarball stem without extension
+# For each line in species list, find matching tarball(s) by substring
 while IFS= read -r raw || [[ -n "${raw}" ]]; do
   s="$(echo "${raw}" | sed 's/#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ -z "${s}" ]] && continue
 
-  # Find tarballs whose filename contains the species token
-  matches=()
-  for f in "${ALL_TARS[@]}"; do
-    base="$(basename "$f")"
-    if [[ "$base" == *"$s"* ]]; then
-      matches+=("$f")
-    fi
-  done
+  # Find matches (substring search against filenames)
+  matches="$(find "${TARBALL_DIR}" -maxdepth 1 -type f -name "*.final.cds.tar.gz" -print | \
+            awk -v pat="${s}" '
+              BEGIN{ found=0 }
+              {
+                n=$0
+                sub(/^.*\//,"",n)   # basename
+                if (index(n, pat) > 0) { print $0; found=1 }
+              }
+              END{ if (found==0) exit 1 }
+            ' 2>/dev/null || true)"
 
-  if [[ ${#matches[@]} -eq 0 ]]; then
-    echo "$s" >> "${MISSING_LIST}"
+  if [[ -z "${matches}" ]]; then
+    echo "${s}" >> "${MISSING_LIST}"
   else
-    # If multiple match, we take all (you can tighten later if needed)
-    for m in "${matches[@]}"; do
-      echo "$m" >> "${FOUND_LIST}"
-    done
+    printf "%s\n" "${matches}" >> "${FOUND_LIST}"
   fi
 done < "${LIST}"
 
@@ -93,7 +87,7 @@ fi
 echo "[INFO] Extracting matched tarballs into: ${OUT_CDS}"
 i=0
 while IFS= read -r tarf; do
-  ((i+=1))
+  i=$((i+1))
   echo "[INFO] (${i}/${FOUND_N}) Extract: $(basename "$tarf")"
   tar -xzf "$tarf" -C "${OUT_CDS}"
 done < "${FOUND_LIST}"
