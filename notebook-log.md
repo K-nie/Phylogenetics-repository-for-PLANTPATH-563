@@ -215,7 +215,7 @@ chmod +x mafft_run.sh
 As already indicated, I set FFT-NS-2 with the flag --auto to build trees twice for large OGs and L-INS-i --localpair --maxiterate 1000 for smaller OGs.
 ### Step C — Trim alignments with TrimAl (robust + avoids `HISTTIMEFORMAT` unbound errors: I ran into this error and it took some time to troubleshoot it)
 
-You hit an interactive shell error:
+I hit an interactive shell error:
 `HISTTIMEFORMAT: unbound variable`
 
 This happens with `set -u` when something references an unset env var.
