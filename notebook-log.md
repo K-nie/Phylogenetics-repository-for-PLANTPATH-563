@@ -400,3 +400,20 @@ At this point I have:
   - `mafft --version`
   - `trimal -h`
   - `iqtree3 -v`
+
+
+## Alignnaton Paper (Note: I have been having issues with my datataset that i wan tot use to run this tool. my file seems corrupted and I have been trying to recover it. i hope to get it working)
+
+1. Chosen alignment method and reasoning
+Chosen method: pygenomveviz (an update of progressiveMauve from the Mauve genome alignment package, Darling et al., 2010).
+Reason for choice: In the Alignathon benchmark, progressiveMauve produced high-quality, transitively closed whole-genome alignments (meaning consistent pairwise homologies without reference bias) and performed well on simulated datasets with rearrangements. It was highlighted for excellent precision in certain contexts (e.g., primate-like data) and for handling gene gain/loss and structural variation effectively. It suits my project dataset because I have species from many clades with expected significant differences in sequences with inversions, rearrangements, and variable gene content — progressiveMauve's locally collinear block (LCB) approach and progressive guide-tree strategy make it strong for detecting conserved regions across subsets of taxa while tolerating structural differences.
+
+Note for HW vs. final project: For this homework, I'm running only pygenomeviz/progressiveMauve. For the final project, I'll run at least two methods (e.g., pygenomeviz + Cactus) to compare alignment quality, such as coverage of conserved regions, handling of rearrangements, and effects on downstream analyses like phylogeny or variant detection.
+
+### Description of the chosen algorithm, assumptions, and limitations
+
+Algorithm: pygenomeviz/progressiveMauve is a progressive multiple genome aligner. It starts by identifying maximal unique matches (anchors/MUMs) to define locally collinear blocks (LCBs — regions of conserved sequence order). It builds a phylogenetic guide tree (often from shared gene content), aligns sequences progressively along the tree, refines anchors recursively, performs gapped alignment within LCBs, and uses a homology hidden Markov model (HMM) to filter spurious matches. It also optimizes a "sum-of-pairs breakpoint score" to accurately detect rearrangement breakpoints even with unequal gene content.
+
+Assumptions: Genomes share orthologous regions detectable via unique anchors; large collinear blocks exist despite rearrangements/indels; divergence allows reliable anchor detection (typically effective at >~50-70% identity in conserved parts); a reasonable phylogenetic structure exists for the guide tree.
+
+Limitations: Computationally demanding for large numbers of genomes ie: very large eukaryotic genomes (runtime scales roughly with the cube of sequence number in worst cases); may fragment LCBs or miss alignments in extremely divergent regions (<50% identity) or heavy repeats/duplications; high memory usage possible; breakpoint detection may require parameter tuning for highly rearranged data; less scalable than some modern graph-based tools (pygenomeviz seems to have solved this problem) (e.g., Cactus) for massive or highly complex variation. 

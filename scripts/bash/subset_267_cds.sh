@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Paths
 LIST="data/processed/species_267.txt"
-TARBALL_DIR="data/processed/01_extract/y1000p_cds_files/y1000p_cds_files"
-OUT_DIR="data/processed/02_subset"
-OUT_CDS="${OUT_DIR}/cds"
-LOG_DIR="data/processed/09_qc/logs"
+TARBALL_DIR="data/processed/10_genomeviz/extract/annotations_gff3"
+OUT_DIR="data/processed/10_genomeviz/05_subset"
+OUT_CDS="${OUT_DIR}/gff3"
+LOG_DIR="data/processed/10_1_qc/logs"
 LOG_FILE="${LOG_DIR}/subset_267_extract.log"
 FOUND_LIST="${LOG_DIR}/subset_267_found_tarballs.txt"
 MISSING_LIST="${LOG_DIR}/subset_267_missing.txt"
