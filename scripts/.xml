@@ -1,0 +1,23 @@
+<distribution id="Deep_Anchor.prior" spec="beast.math.distributions.MRCAPrior" monophyletic="true" tree="@Tree.t:YOUR_TREE_NAME">
+    <taxonset id="Deep_Anchor" spec="TaxonSet">
+        <taxon id="Babjeviella_inositovora" spec="Taxon"/>
+        <taxon id="Pachysolen_tannophilus" spec="Taxon"/>
+    </taxonset>
+    <Uniform id="Uniform.Deep_Anchor" name="distr" lower="190.09" upper="265.39"/>
+</distribution>
+
+<distribution id="Medium_Anchor.prior" spec="beast.math.distributions.MRCAPrior" monophyletic="true" tree="@Tree.t:YOUR_TREE_NAME">
+    <taxonset id="Medium_Anchor" spec="TaxonSet">
+        <taxon id="Zygosaccharomyces_rouxii" spec="Taxon"/>
+        <taxon id="Zygosaccharomyces_kombuchaensis" spec="Taxon"/>
+    </taxonset>
+    <Uniform id="Uniform.Medium_Anchor" name="distr" lower="22.98" upper="51.96"/>
+</distribution>
+
+<distribution id="Young_Anchor.prior" spec="beast.math.distributions.MRCAPrior" monophyletic="true" tree="@Tree.t:YOUR_TREE_NAME">
+    <taxonset id="Young_Anchor" spec="TaxonSet">
+        <taxon id="Kazachstania_siamensis" spec="Taxon"/>
+        <taxon id="Kazachstania_unispora" spec="Taxon"/>
+    </taxonset>
+    <Uniform id="Uniform.Young_Anchor" name="distr" lower="12.36" upper="23.83"/>
+</distribution>

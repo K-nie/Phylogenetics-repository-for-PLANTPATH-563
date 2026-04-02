@@ -1,0 +1,9 @@
+OG0000007.trim.aln.fasta
+OG0000008.trim.aln.fasta
+OG0000009.trim.aln.fasta
+OG0000020.trim.aln.fasta
+OG0000029.trim.aln.fasta
+OG0000032.trim.aln.fasta
+OG0000044.trim.aln.fasta
+OG0000067.trim.aln.fasta
+OG0007179.trim.aln.fasta

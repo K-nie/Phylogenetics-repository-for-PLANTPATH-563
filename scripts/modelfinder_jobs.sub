@@ -1,0 +1,15 @@
+universe                = vanilla
+executable              = /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563/scripts/run_modelfinder_job.sh
+arguments               = "$(aln_file)"
+log                     = /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563/logs/mf_$(ClusterId).$(ProcId).log
+output                  = /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563/logs/mf_$(ClusterId).$(ProcId).out
+error                   = /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563/logs/mf_$(ClusterId).$(ProcId).error
+request_cpus            = 4
+request_memory          = 4GB
+request_disk            = 10GB
+environment             = "OMP_NUM_THREADS=4"
+notify_user             = narhmadey@wisc.edu
+notification            = Always
+max_retries             = 1
+on_exit_remove          = (ExitBySignal == False) && (ExitCode == 0)
+queue aln_file from /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563/scripts/modelfinder_jobs.txt

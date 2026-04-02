@@ -1,29 +1,14 @@
-# ==============================
-# Ignore all processed data
-# ==============================
-data/processed/
-
-# Ignore raw large sequence files
-data/raw/
-
-# QC outputs
-data/processed/
-
-# Logs
-reports/logs/
-
-# Large sequence formats
+.DS_Store
+results/
+data/
+logs/
+iqtree_logs/
+00_downloads/
+bin/
+*.tar.gz
+*.log
+*.out
+*.error
 *.fasta
 *.fa
-*.fna
-*.faa
-*.ffn
 *.aln
-*.msa
-
-# Large tables
-*.tsv
-*.csv
-
-# Mac system files
-.DS_Store

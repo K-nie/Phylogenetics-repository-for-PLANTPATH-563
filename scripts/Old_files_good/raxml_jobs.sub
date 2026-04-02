@@ -1,0 +1,22 @@
+universe                = vanilla
+executable              = submit/run_raxml_advanced.sh
+arguments               = $(file)
+
+# HTCondor logs
+log                     = ../logs/$(Cluster).$(Process).log
+output                  = ../logs/$(Cluster).$(Process).out
+error                   = ../logs/$(Cluster).$(Process).error
+
+# Resource requests
+request_cpus            = 128
+request_memory          = 64GB
+request_disk            = 50GB
+
+environment             = OMP_NUM_THREADS=10
+
+# Email notification
+notify_user             = narhmadey@wisc.edu
+notification            = Always
+
+# Queue one job per line in input.txt
+queue file from input.txt

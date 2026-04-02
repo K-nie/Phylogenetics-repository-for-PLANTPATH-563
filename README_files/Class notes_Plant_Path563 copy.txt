@@ -1,0 +1,224 @@
+Version control: Saving the same files after it is updated. Keeps track of your additions and edits to your script that can allow 
+
+for installing git, type which git. if you see the following  (the git path) then it means you hve git installed 
+(base) Benjamins-MacBook-Pro:~ black_einstein$ which git
+/usr/bin/git
+(base) Benjamins-MacBook-Pro:~ black_einstein$ 
+
+cloning a repossitory means creating a copy of the directory on your computer:
+on the github repo, click on code(green bar) and copy the link under HTTP. To clone the repo,
+type : git clone https://github.com/Blackk-Einstein/Phylogenetics-repository-for-PLANTPATH-563.git (the link to the github)
+
+wc counts lines, words, and characters in its inputs.
+cat displays the contents of its inputs.
+sort sorts its inputs.
+head displays the first 10 lines of its input by default without additional arguments.
+tail displays the last 10 lines of its input by default without additional arguments.
+command > [file] redirects a command’s output to a file (overwriting any existing content).
+command >> [file] appends a command’s output to a file.
+[first] | [second] is a pipeline: the output of the first command is used as the input to the second.
+only the owner of the github repositiory can push
+
+NOTE: for the first time anyone pushes it will asj you for the passkey. THIS IS DONE ONLY ONCE. 
+Fork means copying a reposrity from someones githuh and thenm you clone it. the user name for the forked reposotory change to your user name
+github is fir text and codes only and not for data storage.
+
+
+
+
+
+Paper on CLUSTALW Multiple sequence alignment program
+ClustalW improves progressive multiple sequence alignment by incorporating evolutionary weighting and biologically informed gap penalties, but it assumes homology, depends critically on guide-tree order, propagates early errors, and must be interpreted cautiously—especially for highly divergent sequences
+
+
+1. What does ClustalW assume about sequence relatedness before alignment?
+
+ClustalW assumes that the input sequences are homologous and evolutionarily related before alignment begins.
+This assumption underlies the entire progressive alignment strategy: pairwise distances are interpreted as reflecting evolutionary divergence, and a guide tree is constructed on that basis. The algorithm does not test whether homology exists; it presumes that similarity reflects shared ancestry and that alignment is meaningful under that premise 
+
+CLUSTAL W methods paper
+
+.
+
+2. What is the role of guide trees, and why does that matter?
+
+Guide trees determine the order in which sequences are aligned during progressive alignment. ClustalW:
+
+Builds an initial distance matrix from pairwise alignments
+
+Uses Neighbor-Joining to infer a guide tree
+
+Progressively aligns sequences from closest to most divergent following this tree
+
+Why this matters:
+
+Early alignments are “frozen”—once gaps are introduced, they are not revisited
+
+Errors introduced early propagate through all later stages
+
+The guide tree is not a final phylogeny, but its topology heavily influences alignment structure
+
+The authors emphasize that even if the guide tree topology is correct, errors in early pairwise alignments—not just tree errors—drive downstream misalignment 
+
+CLUSTAL W methods paper
+
+.
+
+3. What do progressive alignment errors imply for downstream analyses?
+
+Progressive alignment errors imply that:
+
+Misaligned regions cannot be corrected later within a single progressive run
+
+Errors can falsely suggest conserved motifs, structural homology, or evolutionary relationships
+
+Downstream analyses (phylogenetics, selection inference, structure prediction) may be systematically biased
+
+The authors explicitly warn that progressive alignment is vulnerable to local minima, where early mistakes lock the alignment into an incorrect configuration that appears stable but is wrong 
+
+CLUSTAL W methods paper
+
+.
+
+4. What information is encoded in gap penalties and sequence weighting?
+Gap penalties encode biological expectations:
+
+Gaps are more likely in loops and flexible regions than in secondary structure
+
+Gaps should not cluster too closely
+
+Previously inserted gaps indicate biologically plausible insertion/deletion sites
+
+ClustalW implements position-specific, residue-specific, and context-dependent gap penalties to reflect these assumptions.
+
+Sequence weighting encodes evolutionary sampling:
+
+Closely related (redundant) sequences are down-weighted
+
+Divergent sequences are up-weighted
+
+Weights are derived from guide-tree branch lengths
+
+Together, these mechanisms attempt to reduce bias from overrepresented lineages and make the alignment reflect evolutionary diversity rather than raw sequence counts 
+
+CLUSTAL W methods paper
+
+.
+
+5. Does ClustalW claim to infer homology, or does it assume it?
+
+ClustalW assumes homology; it does not infer it.
+
+The authors are explicit that multiple alignment is meaningful only when sequences are already believed to be evolutionarily related. ClustalW’s improvements enhance sensitivity and accuracy of alignment given homology, but they do not establish homology itself 
+
+CLUSTAL W methods paper
+
+.
+
+6. Under what conditions do the authors caution against overinterpretation?
+
+The authors caution against overinterpretation when:
+
+Sequences are highly divergent (e.g., <25–30% identity)
+
+Alignments involve large insertions, deletions, or frameshifts
+
+Block structure is unclear or inconsistent with known biology
+
+Loop regions are aligned with high apparent precision (often biologically meaningless)
+
+They stress that:
+
+Loop regions may not have a single “correct” alignment
+
+Some alignments are best viewed as approximate block-level hypotheses
+
+Manual inspection, re-alignment, or iterative refinement may be required
+
+They also emphasize that no heuristic alignment should be treated as globally optimal, especially in difficult or pathological cases
+
+Date Feb 10 3026 Topic: Alignment -(MUSCLE and MAFFT)
+I created a new working environment and install MUSCLE and MAFFT
+To activate this environment, use                                             
+#                                                                               
+#     $ conda activate phylo                                                    
+#                                                                               
+# To deactivate an active environment, use                                      
+#                                                                               
+#     $ conda deactivate       
+
+These are the scripts i ran 
+MAFFT is known for being extremely fast. For a standard set of primate sequences, the --auto strategy is the best place to start, as it chooses the best algorithm based on data size.
+
+Bash
+mafft --auto primatesAA.fasta > primatesAA_mafft.aln
+--auto: Automatically selects the best alignment strategy (L-INS-i, FFT-NS-i, etc.).
+
+>: Redirects the output from the screen into a new file named primatesAA_mafft.aln.
+ and fot MUSCLE, : 2. Running with MUSCLE
+The command depends on whether you are using Version 3 (the classic version) or Version 5 (the modern version). I got the following outputscat . For MUSCLE v5 (The newest version):
+Bash
+muscle -align primatesAA.fasta -output primatesAA_muscle.aln
+
+i tried again with the following parameters: 1. The "Best All-Rounder" (Highly Recommended)If you aren't sure which one to pick, use the L-INS-i strategy. It is the most accurate for small-to-medium datasets because it considers local structural information.Bashmafft --localpair --maxiterate 1000 primatesAA.fasta > primatesAA_LINS.aln
+--localpair: Uses local pairwise alignment information.--maxiterate 1000: Refines the alignment up to 1000 times to get the best result.2. The "Quick & Dirty" (For very large datasets)If you ever have thousands of sequences and the command above is taking hours, use FFT-NS-2. It is much faster but slightly less precise.Bashmafft --retree 2 --maxiterate 0 primatesAA.fasta > primatesAA_fast.aln
+3. Comparison of ParametersParameterWhat it doesWhen to use it--autoLet's MAFFT decide for you.When you are in a hurry.--localpairHigher accuracy (L-INS-i).Your current best choice.--globalpairBest if sequences are similar in length (G-INS-i).For sequences with no large gaps at ends.--reorderGroups similar sequences together in the output.To make the alignment easier to read by eye.My Recommendation for your next run:Try the L-INS-i with the reorder flag. It makes looking at your .aln file much more intuitive because similar primates (like Chimps and Humans) will be right next to each other.Run this command:Bashmafft --localpair --maxiterate 1000 --reorder primatesAA.fasta > primatesAA_best.aln
+Would you like me to show you a command to check how many gaps were created in this new alignment compared to your first one?
+
+o check the quality of your alignment and see how many gaps were introduced, you can use a simple grep command. Gaps in a FASTA/alignment file are represented by the dash character (-).
+
+Run this in your terminal:
+
+Bash
+grep -o "-" primatesAA_best.aln | wc -l
+What this command does:
+grep -o "-": Searches the file and pulls out only the dash characters, putting each one on a new line.
+
+| (The Pipe): Takes that list of dashes and hands it to the next command.
+
+wc -l: Counts the number of lines (effectively counting every single gap in the whole alignment).
+
+Moving Forward: Cleaning with trimAl
+In phylogenetics, columns in an alignment that are mostly gaps (meaning only one or two species have data there) can sometimes "confuse" tree-building software. A common next step is to use trimAl to remove those messy columns.
+
+If you have trimAl installed in your environment, try this:
+
+Bash
+trimal -in primatesAA_best.aln -out primatesAA_trimmed.aln -automated1
+-automated1: This is a great "beginner" parameter. It automatically decides which columns to throw away based on the density of gaps and similarity.
+
+sequences colored or formatted.
+
+However, the most direct way to "eye-test" an alignment in the terminal is to use head or cat combined with a search.
+
+1. The "Quick Look" (Standard)
+Run this to see the first 40 characters of the first few sequences:
+
+Bash
+head -n 20 primatesAA_best.aln
+2. The "Gap Check" (Visual)
+If you want to see where the sequences start to align, use less -S (the -S flag prevents lines from wrapping, so you can scroll sideways with your arrow keys):
+
+Bash
+less -S primatesAA_best.aln
+Once inside less, use your Right Arrow key to scroll across the alignment.
+
+Press q to quit and go back to your prompt.
+
+3. Using a dedicated CLI viewer (If installed)
+If you want to see a beautiful, colored alignment directly in your terminal, check if you have a tool called alv or esl-reformat. If not, and you want to install a very cool one, you can add alv to your conda environment:
+
+Bash
+conda install -c bioconda alv
+alv -m primatesAA_best.aln | head -n 30
+This will highlight the Amino Acids by their properties (e.g., hydrophobic vs. polar), making the alignment "blocks" jump out at you.
+
+What to look for:
+Conserved Blocks: Do you see columns where almost every sequence has the same letter? (e.g., all M for Methionine at the start).
+
+Gap Clumping: Are gaps scattered everywhere like "shotgun holes," or are they neatly lined up in specific regions? (Neat blocks are usually a sign of a better alignment).
+
+Next Step for your PhD Coursework
+Now that you have a clean alignment, the next logical step in a phylogenetics workflow is to build a tree.
+
+`

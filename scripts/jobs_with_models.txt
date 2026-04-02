@@ -1,0 +1,9 @@
+OG0000007.trim.aln.fasta	Q.YEAST+F+R10
+OG0000008.trim.aln.fasta	LG+F+R10
+OG0000009.trim.aln.fasta	LG+R10
+OG0000020.trim.aln.fasta	Q.YEAST+R10
+OG0000029.trim.aln.fasta	LG+F+R9
+OG0000032.trim.aln.fasta	LG+F+R9
+OG0000044.trim.aln.fasta	LG+F+R10
+OG0000067.trim.aln.fasta	LG+F+R9
+OG0007179.trim.aln.fasta	JTT-DCMUT
