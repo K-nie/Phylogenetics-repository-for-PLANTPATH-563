@@ -1,4 +1,5 @@
 #!/bin/bash
+# Author:Benjamin Narh-Madey
 # run_modelfinder_job.sh
 # Condor job script: runs IQ-TREE ModelFinder for a single orthogroup.
 # Called by modelfinder_jobs.sub with one argument:
