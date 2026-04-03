@@ -1,4 +1,5 @@
 #!/bin/bash
+# Author:Benjamin Narh-Madey
 # run_astral.sh
 # Combines all RAxML-NG gene trees into a single multi-species coalescent tree.
 # Author: Benjamin Narh-Madey
