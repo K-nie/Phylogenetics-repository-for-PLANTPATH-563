@@ -1,81 +1,92 @@
-## Project Title: Mannose-associated conserved genes in 267 yeast species (CDS/proteins → MSA)
+# Lab Notebook — Mannose-associated conserved genes in 267 yeast species
+
 **Notebook date:** 2026-02-10
-### Goal:
-To use orthogroup-defined gene families (from Orthofinder across 1,154 Y1000+ species) and restrict them to your 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
 
-### Core logic:(CDS/proteins → MSA → trimming → gene trees)
+## Goal
 
-1. My ML models identify orthogroups (OGs) associated with mannose phenotype.
-2. An OG is a gene-family “bucket”, it may contain a sinfle gene though. 
-3. Each species can contribute 0, 1, or many genes to a given OG (paralogs happen).Therefore for this analyses, MSA is done per orthogroup, not “per species”.
-Each species can contribute 0, 1, or many genes to an OG (gene family / paralogs).
+To use orthogroup-defined gene families (from OrthoFinder across 1,154 Y1000+ species) and restrict them to 267 focal species, then align each orthogroup separately and trim low-quality regions to enable downstream conservation analysis and phylogenetic inference. The main aim is to analyze **267 yeast species** from diverse taxa to identify **genes conserved in mannose-utilizing species** compared with species that do not metabolize mannose.
 
-### Core workflow (per orthogroup)
+---
+
+## Core Logic (CDS/proteins → MSA → trimming → gene trees)
+
+1. ML models identify orthogroups (OGs) associated with the mannose phenotype.
+2. An OG is a gene-family "bucket" — it may contain a single gene, though paralogs are common.
+3. Each species can contribute 0, 1, or many genes to a given OG. Therefore, MSA is done per orthogroup, not per species.
+
+---
+
+## Core Workflow (per orthogroup)
+
 1. QC input sequences (CDS/proteins/genomes as available)
-2. Build comparable gene sets across species (Orthogroups / for curated genes)
-3. **Subset** full Y1000+ orthogroup FASTAs (1,154 species) down to **my 267 species**
-4. Run **MSA per orthogroup** (using MAFFT with the following configurations: for OGs that were small ie <200 sequences, and also skipped OGs with <3 sequecnes. For large OGs,is chose  --auto selected:FFT-NS-2 (fast progressive method, guide trees built twice) but for small OGs with < with 3 sequences,  used L-INS-i (--localpair --maxiterate 1000) = highly accurate ). I did this because accuracy is maximized where feasible (small OGs) and computation remains feasible for massive gene families (large OGs)
+2. Build comparable gene sets across species (orthogroups, or curated genes)
+3. **Subset** full Y1000+ orthogroup FASTAs (1,154 species) down to **267 focal species**
+4. Run **MSA per orthogroup** using MAFFT:
+   - OGs with ≤ 200 sequences: `--localpair --maxiterate 1000` (L-INS-i — high accuracy)
+   - OGs with > 200 sequences: `--auto` (FFT-NS-2 — fast progressive, guide trees built twice)
+   - OGs with < 3 sequences: skipped
+   - Rationale: accuracy is maximized where feasible (small OGs); computation remains tractable for large gene families
 5. Trim alignments (TrimAl)
-6. Infer gene trees / model selection / support (IQ-TREE)
-7. Downstream: quantify conservation / enrichment between phenotype groups
+6. Infer gene trees, model selection, and bootstrap support (IQ-TREE)
+7. Downstream: quantify conservation and enrichment between phenotype groups
 
+---
 
-### Environment setup (conda)
+## Environment Setup (conda)
 
-I created a working environment to preevent tools interferring with other system tools:
+A dedicated environment was created to prevent tools from interfering with other system tools:
 
 ```bash
 conda create -n phylo_env -c bioconda -c conda-forge iqtree mafft trimal fasttree
 conda activate phylo_env
 ```
 
-```python
-# (In the terminal, I ran):
-!conda --version
-# Optional: verify tools are visible
-!which mafft || true
-!which trimal || true
-!which iqtree3 || true
-!which iqtree || true
+Verify tools are accessible:
+
+```bash
+conda --version
+which mafft
+which trimal
+which iqtree3 || which iqtree
 ```
 
-## Assumed repository layout
+---
 
-I ran all analyses from the root repository root ( `Phylogenetics-repository-for-PLANTPATH-563`).  
-All paths below are relative to that root.
+## Repository Layout
 
-### Inputs I already have
+All analyses were run from the repository root (`Phylogenetics-repository-for-PLANTPATH-563`). All paths below are relative to that root.
 
-- `data/processed/species_267.txt` : list of the 267 species IDs (one per line)
-- `data/processed/03_ml_orthogroups/01_og_lists/orthogroup_list.txt` : **master OG list** (union of my 6 ML models which contained 9 OGs)
-- Orthofinder OG FASTAs (all species):  
-  `data/raw/y1000p_orthofinder/Orthogroup_Sequences/OGxxxxxxx.fasta`
+### Inputs
 
-Already created:
-- Subset OG FASTAs to your 267 species:  
-  `data/processed/03_ml_orthogroups/05_og_fastas_267/*.fasta`
-- MAFFT alignments per OG:  
-  `data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta`
+- `data/processed/species_267.txt` — list of 267 species IDs (one per line)
+- `data/processed/03_ml_orthogroups/01_og_lists/orthogroup_list.txt` — master OG list (union of 6 ML models, containing 9 OGs)
+- OrthoFinder OG FASTAs (all species): `data/raw/y1000p_orthofinder/Orthogroup_Sequences/OGxxxxxxx.fasta`
 
-### Created and verified directories
+### Outputs (created during preprocessing)
 
-```python
-!mkdir -p data/processed/03_ml_orthogroups/logs
-!mkdir -p data/processed/03_ml_orthogroups/05_og_fastas_267
-!mkdir -p data/processed/03_ml_orthogroups/06_alignments
-!mkdir -p data/processed/03_ml_orthogroups/07_trimmed_alignments
-!mkdir -p data/processed/03_ml_orthogroups/08_gene_trees
-!ls -lah data/processed/03_ml_orthogroups | sed -n '1,120p'
+- Subset OG FASTAs (267 species): `data/processed/03_ml_orthogroups/05_og_fastas_267/*.fasta`
+- MAFFT alignments per OG: `data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta`
+- TrimAl trimmed alignments: `data/processed/03_ml_orthogroups/07_trimmed_alignments/*.trim.aln.fasta`
+- IQ-TREE gene trees (local test): `data/processed/03_ml_orthogroups/08_gene_trees/`
+
+### Create and verify directories
+
+```bash
+mkdir -p data/processed/03_ml_orthogroups/logs
+mkdir -p data/processed/03_ml_orthogroups/05_og_fastas_267
+mkdir -p data/processed/03_ml_orthogroups/06_alignments
+mkdir -p data/processed/03_ml_orthogroups/07_trimmed_alignments
+mkdir -p data/processed/03_ml_orthogroups/08_gene_trees
+ls -lah data/processed/03_ml_orthogroups
 ```
 
-### Step A — Subset Orthogroup FASTAs to 267 species (seqkit)
+---
 
-This step reads each OG in my `orthogroup_list.txt`, opens the full OG FASTA from Orthofinder (1,154 species),
-and filters sequences whose headers contain **any** species ID from `species_267.txt`.
+## Step A — Subset Orthogroup FASTAs to 267 Species (seqkit)
 
-**Important header pattern note:** My OG FASTA headers look like (this initally creates parsing problems but I figured it out and solved it):
-`>g009075.m1|aspergillus_nidulans.final`  
-So my species list should contain the `*.final` IDs (matching the portion after the pipe).
+This step reads each OG in `orthogroup_list.txt`, opens the full OG FASTA from OrthoFinder (1,154 species), and filters sequences whose headers match any species ID from `species_267.txt`.
+
+**Header pattern note:** OG FASTA headers follow the pattern `>g009075.m1|aspergillus_nidulans.final`. The species list must therefore contain the `*.final` IDs — the portion after the pipe — to match correctly.
 
 ### Script: `og_fastas_267.sh`
 
@@ -138,23 +149,26 @@ chmod +x og_fastas_267.sh
 
 ### Run subsetting + sanity checks
 
-```python
-# Run
-!./og_fastas_267.sh
+```bash
+./og_fastas_267.sh
 
 # Count outputs
-!ls -1 data/processed/03_ml_orthogroups/05_og_fastas_267/*.fasta 2>/dev/null | wc -l || true
-!head -n 20 data/processed/03_ml_orthogroups/logs/og_counts_267.tsv || true
-!tail -n 20 data/processed/03_ml_orthogroups/logs/zero_after_filter.log || true
+ls -1 data/processed/03_ml_orthogroups/05_og_fastas_267/*.fasta 2>/dev/null | wc -l
+head -n 20 data/processed/03_ml_orthogroups/logs/og_counts_267.tsv
+tail -n 20 data/processed/03_ml_orthogroups/logs/zero_after_filter.log
 ```
 
-### Step B — MAFFT alignments per OG (robust loop)
+---
 
-Safeguards:
-- skip OGs with <3 sequences
-- use more accurate method for ≤200 sequences
-- use `--auto` for large OGs (scalable)
-- write a run log
+## Step B — Multiple Sequence Alignment (MAFFT)
+
+Safeguards built into the script:
+- Skip OGs with fewer than 3 sequences
+- Use L-INS-i (`--localpair --maxiterate 1000`) for OGs with ≤ 200 sequences
+- Use `--auto` (FFT-NS-2) for OGs with > 200 sequences
+- Write a run log for reproducibility
+
+### Script: `mafft_run.sh`
 
 ```bash
 cat > mafft_run.sh <<'EOF'
@@ -204,23 +218,28 @@ EOF
 chmod +x mafft_run.sh
 ```
 
-### Run MAFFT + verify outputs with the following parameters:
+### Run MAFFT + verify outputs
 
-```python
-!mafft --version | head -n 2
-!./mafft_run.sh
-!ls -1 data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta 2>/dev/null | wc -l || true
-!tail -n 30 data/processed/03_ml_orthogroups/logs/mafft_run.log || true
+```bash
+mafft --version | head -n 2
+./mafft_run.sh
+ls -1 data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta 2>/dev/null | wc -l
+tail -n 30 data/processed/03_ml_orthogroups/logs/mafft_run.log
 ```
-As already indicated, I set FFT-NS-2 with the flag --auto to build trees twice for large OGs and L-INS-i --localpair --maxiterate 1000 for smaller OGs.
-### Step C — Trim alignments with TrimAl (robust + avoids `HISTTIMEFORMAT` unbound errors: I ran into this error and it took some time to troubleshoot it)
 
-I hit an interactive shell error:
-`HISTTIMEFORMAT: unbound variable`
+**MAFFT mode summary:** `--auto` (FFT-NS-2) was used for large OGs — this builds guide trees twice for improved accuracy at scale. L-INS-i (`--localpair --maxiterate 1000`) was used for smaller OGs where accuracy is maximized without excessive computation.
 
-This happens with `set -u` when something references an unset env var.
-The script below defensively sets `HISTTIMEFORMAT` if missing.
-It also writes to a `.tmp` file and then moves it into place (safer).
+---
+
+## Step C — Alignment Trimming (TrimAl)
+
+Each MAFFT alignment was trimmed with `trimal -automated1`.
+
+**Rationale:** Large OGs aligned with FFT-NS-2 can introduce noisy, gap-rich columns that inflate false phylogenetic signal. The `-automated1` flag adapts trimming thresholds automatically per alignment, making it ideal for a batch pipeline across OGs with widely varying length, divergence, and gap patterns — no manual threshold tuning required.
+
+**Troubleshooting note:** An `HISTTIMEFORMAT: unbound variable` error was encountered when running with `set -u`. This occurs because interactive shells or plugins reference this variable without setting it. The script defensively initializes it with `: "${HISTTIMEFORMAT:=}"`. Output is also written to a `.tmp` file before being moved into place to prevent partial outputs from corrupting the pipeline.
+
+### Script: `trim_align.sh`
 
 ```bash
 cat > trim_align.sh <<'EOF'
@@ -256,7 +275,6 @@ for aln in "${files[@]}"; do
 
   echo "[TRIMAL] $og" | tee -a "$LOG"
 
-  # macOS: time -l prints memory/time stats; if unavailable, just run trimal
   if command -v /usr/bin/time >/dev/null 2>&1; then
     /usr/bin/time -l trimal -in "$aln" -out "$tmp" -automated1 >>"$LOG" 2>&1
   else
@@ -279,29 +297,22 @@ chmod +x trim_align.sh
 
 ### Run TrimAl + verify
 
-I trimmed each MAFFT alignment with trimal -automated1 because large OGs were aligned with FFT-NS-2, which is fast but rough. This introduces introduces noisy columns, produces gap-rich regions and 
-can inflate false phylogenetic signal. 
-Because I was running a batch pipeline across many OGs, with widely varying properties (length, divergence, gap patterns), i chose -automated1 is ideal because it adapts trimming automatically per alignment
-and avoids subjective hand-tuning of thresholds. 
-
-```python
-!trimal -h | head -n 2
-!./trim_align.sh
-!ls -1 data/processed/03_ml_orthogroups/07_trimmed_alignments/*.trim.aln.fasta 2>/dev/null | wc -l || true
-!tail -n 40 data/processed/03_ml_orthogroups/logs/trimal_run.log || true
+```bash
+trimal -h | head -n 2
+./trim_align.sh
+ls -1 data/processed/03_ml_orthogroups/07_trimmed_alignments/*.trim.aln.fasta 2>/dev/null | wc -l
+tail -n 40 data/processed/03_ml_orthogroups/logs/trimal_run.log
 ```
 
+---
 
-### Step D — Gene trees with IQ-TREE (IQ-TREE 3)
+## Step D — Gene Trees with IQ-TREE (local test)
 
-In my environment, `iqtree2` was not found, but `iqtree3` exists, installed `iqtree3`.
-Use **Ultrafast bootstrap** with **1000 replicates** via `-B 1000`.
+IQ-TREE 3 (`iqtree3`) is used. The script falls back to `iqtree` if `iqtree3` is not found. Ultrafast bootstrap is run with 1,000 replicates (`-B 1000`).
 
-### Run per trimmed alignment
-- `-m MFP` : ModelFinder + tree inference
-- `-B 1000` : ultrafast bootstrap
-- `-T AUTO` : auto threads
-- `-pre` : output prefix per OG
+**Note:** This local run is used to validate the preprocessing pipeline. The full model selection and batch tree inference for all 9 OGs runs on the GLBRC HT Condor cluster (see main README for cluster pipeline details).
+
+### Script: `iqtree_run.sh`
 
 ```bash
 cat > iqtree_run.sh <<'EOF'
@@ -352,72 +363,85 @@ chmod +x iqtree_run.sh
 
 ### Run IQ-TREE + verify outputs
 
-```python
-# NOTE: this can be compute-heavy depending on alignment sizes so I plan to run  this part on HTC cluster
-!./iqtree_run.sh
-!ls -lah data/processed/03_ml_orthogroups/08_gene_trees | sed -n '1,120p'
-!tail -n 40 data/processed/03_ml_orthogroups/logs/iqtree_run.log || true
+```bash
+# Note: compute-heavy for large alignments — run on HTC cluster for full batch
+./iqtree_run.sh
+ls -lah data/processed/03_ml_orthogroups/08_gene_trees
+tail -n 40 data/processed/03_ml_orthogroups/logs/iqtree_run.log
 ```
 
-### Next analysis steps (after gene trees)
+**IQ-TREE parameters:**
 
-At this point I have:
-- per-OG trimmed alignments (MSA)
-- per-OG gene trees + bootstrap support
+| Flag | Purpose |
+|------|---------|
+| `-m MFP` | ModelFinder + tree inference in one run |
+| `-B 1000` | Ultrafast bootstrap (1,000 replicates) |
+| `-T AUTO` | Automatic thread detection |
+| `-pre` | Output prefix per OG |
 
-### Next steps  (things I am thinking of doing)
+---
 
-1. **Define phenotype groups**
-   - `mannose-growers` vs `non-growers` (a table mapping species → phenotype)
+## Next Analysis Steps (after gene trees)
 
-2. **Quantify conservation per OG**
-   - residue conservation scores per column (Shannon entropy, Jensen-Shannon, etc.)
-   - per-OG summary: mean entropy, fraction conserved sites, etc.
-   - compare distributions between phenotype groups
+At this point the pipeline has produced:
+- Per-OG trimmed alignments (MSA)
+- Per-OG gene trees with bootstrap support
 
-3. **Compare sequence features by group**
-   - group-specific motifs, indels, domain differences
-   - test enrichment of conserved substitutions in growers vs non-growers
+Planned downstream analyses:
 
-4. **Handle paralogs (big OGs)**
-   - your largest OGs suggest multi-copy gene families
-   - options: keep all copies (gene-family view), or reduce to 1 per species (e.g., longest, best-scoring) for clearer phylogenies
+1. **Define phenotype groups** — map species to mannose-grower vs. non-grower phenotype
+2. **Quantify conservation per OG** — residue conservation scores per column (Shannon entropy, Jensen-Shannon divergence); compare distributions between phenotype groups
+3. **Compare sequence features by group** — group-specific motifs, indels, domain differences; enrichment of conserved substitutions in growers vs. non-growers
+4. **Handle paralogs in large OGs** — options: keep all copies (gene-family view), or reduce to one per species (e.g., longest/best-scoring) for cleaner phylogenies
+5. **Species tree (optional)** — concatenate single-copy OGs and infer a species tree, or use gene-tree coalescence methods (ASTRAL)
 
-5. **Optional: concatenation / species tree**
-   - choose a set of single-copy OGs, concatenate alignments, infer species tree
-   - or use gene-tree methods (ASTRAL) if desired
+---
 
-### Reproducibility checklist
+## Reproducibility Checklist
 
-- Keep all key lists under version control:
-  - `species_267.txt`
-  - `orthogroup_list.txt` (master OG list)
-- Log every run:
-  - `logs/mafft_run.log`
-  - `logs/trimal_run.log`
-  - `logs/iqtree_run.log`
-- Capture tool versions:
-  - `mafft --version`
-  - `trimal -h`
-  - `iqtree3 -v`
+Keep all key input lists under version control:
+- `species_267.txt`
+- `orthogroup_list.txt` (master OG list)
 
+Log every run:
+- `logs/mafft_run.log`
+- `logs/trimal_run.log`
+- `logs/iqtree_run.log`
 
-## Alignnaton Paper (Note: I have been having issues with my datataset that i wan tot use to run this tool. my file seems corrupted and I have been trying to recover it. i hope to get it working)
+Capture and record tool versions:
+```bash
+mafft --version
+trimal -h | head -n 2
+iqtree3 -v
+```
 
-1. Chosen alignment method and reasoning
-Chosen method: pygenomveviz (an update of progressiveMauve from the Mauve genome alignment package, Darling et al., 2010).
-Reason for choice: In the Alignathon benchmark, progressiveMauve produced high-quality, transitively closed whole-genome alignments (meaning consistent pairwise homologies without reference bias) and performed well on simulated datasets with rearrangements. It was highlighted for excellent precision in certain contexts (e.g., primate-like data) and for handling gene gain/loss and structural variation effectively. It suits my project dataset because I have species from many clades with expected significant differences in sequences with inversions, rearrangements, and variable gene content — progressiveMauve's locally collinear block (LCB) approach and progressive guide-tree strategy make it strong for detecting conserved regions across subsets of taxa while tolerating structural differences.
+---
 
-Note for HW vs. final project: For this homework, I'm running only pygenomeviz/progressiveMauve. For the final project, I'll run at least two methods (e.g., pygenomeviz + Cactus) to compare alignment quality, such as coverage of conserved regions, handling of rearrangements, and effects on downstream analyses like phylogeny or variant detection. (https://github.com/K-nie/Phylogenetics-repository-for-PLANTPATH-563.git
-   7e0b6fe..b8ff884  main -> main)
+## Genome Alignment — pygenomeviz / progressiveMauve
 
-### Description of the chosen algorithm, assumptions, and limitations
+### Chosen Method and Rationale
 
-Algorithm: pygenomeviz/progressiveMauve is a progressive multiple genome aligner. It starts by identifying maximal unique matches (anchors/MUMs) to define locally collinear blocks (LCBs — regions of conserved sequence order). It builds a phylogenetic guide tree (often from shared gene content), aligns sequences progressively along the tree, refines anchors recursively, performs gapped alignment within LCBs, and uses a homology hidden Markov model (HMM) to filter spurious matches. It also optimizes a "sum-of-pairs breakpoint score" to accurately detect rearrangement breakpoints even with unequal gene content.
+**Method:** pygenomeviz (wrapping progressiveMauve from the Mauve genome alignment package, Darling et al., 2010).
 
-Assumptions: Genomes share orthologous regions detectable via unique anchors; large collinear blocks exist despite rearrangements/indels; divergence allows reliable anchor detection (typically effective at >~50-70% identity in conserved parts); a reasonable phylogenetic structure exists for the guide tree.
+**Rationale:** In the Alignathon benchmark, progressiveMauve produced high-quality, transitively closed whole-genome alignments (consistent pairwise homologies without reference bias) and performed well on simulated datasets with rearrangements. It was highlighted for excellent precision in certain contexts (e.g., primate-like data) and for handling gene gain/loss and structural variation effectively. It suits this project's dataset — species from many clades with expected significant sequence differences, inversions, rearrangements, and variable gene content. progressiveMauve's locally collinear block (LCB) approach and progressive guide-tree strategy make it effective for detecting conserved regions across subsets of taxa while tolerating structural differences.
 
-Limitations: Computationally demanding for large numbers of genomes ie: very large eukaryotic genomes (runtime scales roughly with the cube of sequence number in worst cases); may fragment LCBs or miss alignments in extremely divergent regions (<50% identity) or heavy repeats/duplications; high memory usage possible; breakpoint detection may require parameter tuning for highly rearranged data; less scalable than some modern graph-based tools (pygenomeviz seems to have solved this problem) (e.g., Cactus) for massive or highly complex variation. 
+**Scope:** For the homework, only pygenomeviz/progressiveMauve is being run. For the final project, at least two methods will be compared (e.g., pygenomeviz + Cactus) to evaluate alignment quality across metrics such as coverage of conserved regions, handling of rearrangements, and downstream effects on phylogeny or variant detection.
 
-https://github.com/K-nie/Phylogenetics-repository-for-PLANTPATH-563.git
-   7e0b6fe..b8ff884  main -> main
+### Algorithm Description
+
+pygenomeviz/progressiveMauve is a progressive multiple genome aligner. It identifies maximal unique matches (anchors/MUMs) to define locally collinear blocks (LCBs — regions of conserved sequence order), builds a phylogenetic guide tree from shared gene content, aligns sequences progressively along the tree, refines anchors recursively, performs gapped alignment within LCBs, and uses a homology hidden Markov model (HMM) to filter spurious matches. It also optimizes a sum-of-pairs breakpoint score to accurately detect rearrangement breakpoints even with unequal gene content.
+
+### Assumptions
+
+- Genomes share orthologous regions detectable via unique anchors
+- Large collinear blocks exist despite rearrangements and indels
+- Divergence level allows reliable anchor detection (typically effective at > ~50–70% identity in conserved regions)
+- A reasonable phylogenetic structure exists for the guide tree
+
+### Limitations
+
+- Computationally demanding for large numbers of genomes or very large eukaryotic genomes (runtime scales roughly with the cube of sequence number in worst cases)
+- May fragment LCBs or miss alignments in extremely divergent regions (< 50% identity) or regions with heavy repeats/duplications
+- High memory usage is possible
+- Breakpoint detection may require parameter tuning for highly rearranged data
+- Less scalable than modern graph-based tools (e.g., Cactus) for massive or highly complex variation — pygenomeviz's updated implementation partially addresses this

@@ -90,16 +90,20 @@ echo ""
 echo "=== Copying results to $RESULTS_DIR ==="
 mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
 
-# Core BEAST2 output files 
-# Note: internal XML names were set to {og}_{run}.trace.log
+# Core BEAST2 output files
+# generate_beast_xml.py names files as {OG_NAME}_{run_id}.trace.log / .trees
+# The run_id is embedded in the XML passed to this job — match by glob
 for EXT in trace.log trees; do
-    # Looking for files like OG0000007_run1.trace.log
-    SRC="${OG_NAME}.${EXT}"
-    if [ -f "$SRC" ]; then
-        cp "$SRC" "$RESULTS_DIR/"
-        echo "  Copied: $SRC"
-    else
-        echo "  Warning: $SRC not found"
+    for SRC in "${OG_NAME}"_run*.${EXT}; do
+        if [ -f "$SRC" ]; then
+            cp "$SRC" "$RESULTS_DIR/"
+            echo "  Copied: $SRC"
+        fi
+    done
+    # Warn only if nothing matched at all
+    found=$(ls "${OG_NAME}"_run*.${EXT} 2>/dev/null | wc -l)
+    if [ "$found" -eq 0 ]; then
+        echo "  Warning: no ${OG_NAME}_run*.${EXT} files found"
     fi
 done
 

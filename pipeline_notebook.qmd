@@ -1,0 +1,744 @@
+---
+title: "Saccharomycotina Yeast Phylogenetics Pipeline"
+subtitle: "Mannose-associated conserved genes in 267 yeast species"
+author: "Benjamin Narh-Madey"
+date: "March 2026"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    theme: flatly
+    highlight-style: github
+    embed-resources: true
+    fig-width: 10
+    fig-height: 6
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup, include=FALSE}
+# Core packages — install if missing
+pkgs <- c("ape", "caper", "picante", "phytools", "ggplot2", "dplyr",
+          "tidyr", "knitr", "kableExtra")
+new_pkgs <- pkgs[!pkgs %in% installed.packages()[,"Package"]]
+if (length(new_pkgs)) install.packages(new_pkgs, repos = "https://cloud.r-project.org")
+
+suppressPackageStartupMessages({
+  library(ape)
+  library(caper)
+  library(picante)
+  library(phytools)
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+  library(knitr)
+  library(kableExtra)
+})
+
+# Set working directory to project root — adjust this path as needed
+# PROJECT_ROOT <- "/home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563"
+# setwd(PROJECT_ROOT)
+
+knitr::opts_chunk$set(
+  fig.align = "center",
+  out.width = "100%"
+)
+```
+
+## Project Overview
+
+This pipeline analyzes **267 focal yeast species** from the Y1000+ *Saccharomycotina* dataset to identify gene families (orthogroups) conserved in mannose-utilizing species compared with non-utilizers. Machine learning models first identified orthogroups (OGs) associated with the mannose growth phenotype. The pipeline then aligns, trims, and infers gene trees for each orthogroup, followed by phylogenetic signal analysis.
+
+**Two-stage workflow:**
+
+| Stage | Where | Steps |
+|-------|-------|-------|
+| Preprocessing | Local / submit node | Subset FASTAs → MAFFT → TrimAl → IQ-TREE (test) |
+| Analysis | GLBRC HT Condor cluster | ModelFinder + IQ-TREE trees → RAxML-NG → ASTRAL → BEAST2 → D-statistic (R) |
+
+**How the IQ-TREE trees flow through the pipeline:**
+
+```
+Phase 1 (IQ-TREE -m MFP -B 1000)
+    │
+    ├─── jobs_with_models.txt  ──────────────────────► Phase 2a (RAxML-NG --model)
+    │                                                       │
+    └─── iqtree_logs/OG*.treefile  ─────────────────► Phase 2b (BEAST2 starting tree)
+                                                            │
+Phase 2a (RAxML-NG bestTree / support)                     │
+    │                                                       │
+    ├─── *.raxml.bestTree  ──────────────────────────► Phase 2c (ASTRAL species tree)
+    └─── *.raxml.support   ──────────────────────────► Phase 3  (D-statistic ML trees)
+                                                       Phase 3  (D-statistic Bayesian trees) ◄─ Phase 2b
+```
+
+**Cluster:** GLBRC scarcity-ap-1 | **Conda env:** `phylo_env` | **User:** narhmadey
+
+---
+
+## Research Questions
+
+1. **How has the genetic basis for mannose metabolism evolved across *Saccharomycotina*?**
+   Maximum likelihood trees (RAxML-NG) and time-calibrated Bayesian trees (BEAST2) with MRCA anchors reveal when key evolutionary splits occurred across 267 species.
+
+2. **Does the evolutionary history of these genes predict mannose growth ability?**
+   Binary trait data (`1` = growth, `0` = no growth) mapped onto BEAST2 chronograms identifies eras where mannose metabolism was gained or lost.
+
+3. **Does mannose growth show phylogenetic signal across gene trees?**
+   The D-statistic (Fritz & Purvis 2010) tests whether the trait is phylogenetically structured or randomly distributed.
+
+---
+
+## Dataset Summary
+
+```{r dataset-summary}
+# Read the mannose traits CSV
+# Adjust path relative to your working directory
+traits_file <- "data/mannose_traits.csv"
+
+if (file.exists(traits_file)) {
+  trait_data <- read.table(traits_file,
+                           header = TRUE, sep = "\t",
+                           stringsAsFactors = FALSE,
+                           quote = "", comment.char = "")
+
+  cat(sprintf("Total species:        %d\n", nrow(trait_data)))
+  cat(sprintf("Mannose growers (1):  %d\n", sum(trait_data$Mannose_Class == 1)))
+  cat(sprintf("Non-growers (0):      %d\n", sum(trait_data$Mannose_Class == 0)))
+
+  trait_data |>
+    count(Mannose_Class) |>
+    mutate(Phenotype = ifelse(Mannose_Class == 1, "Mannose grower", "Non-grower"),
+           Percentage = round(100 * n / sum(n), 1)) |>
+    select(Phenotype, Count = n, `%` = Percentage) |>
+    kable(caption = "Mannose growth phenotype distribution across 267 yeast species") |>
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  message("Trait file not found — place mannose_traits.csv in data/ to run this block.")
+}
+```
+
+```{r dataset-plot, eval=file.exists("data/mannose_traits.csv")}
+ggplot(trait_data, aes(x = factor(Mannose_Class,
+                                  labels = c("Non-grower", "Mannose grower")),
+                       fill = factor(Mannose_Class))) +
+  geom_bar(width = 0.5, colour = "white") +
+  scale_fill_manual(values = c("#d73027", "#4575b4"), guide = "none") +
+  labs(title = "Mannose growth phenotype across 267 yeast species",
+       x = NULL, y = "Number of species") +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+---
+
+## Environment Setup
+
+The conda environment `phylo_env` must be created and activated before running any
+pipeline steps on the cluster.
+
+```{bash env-setup, eval=FALSE}
+conda create -n phylo_env -c bioconda -c conda-forge \
+    iqtree mafft trimal fasttree seqkit \
+    raxml-ng beast2 beagle-lib \
+    aster \
+    r-base r-caper r-picante r-phytools r-ape
+
+conda activate phylo_env
+
+# Verify key tools
+mafft --version
+trimal -h | head -n 1
+iqtree3 --version || iqtree --version
+raxml-ng --version
+
+# Package environment for Condor execute nodes
+conda pack -n phylo_env -o phylo_env.tar.gz
+```
+
+---
+
+## Preprocessing Pipeline (Local)
+
+These steps run locally (or on the submit node) to produce the trimmed orthogroup
+alignments (`OG*.trim.aln.fasta`) used by all downstream cluster analyses.
+
+### Step A — Subset OrthoFinder FASTAs to 267 Species
+
+Each full OG FASTA (1,154 species) is filtered to retain only sequences from the
+267 focal species using `seqkit grep`.
+
+> **Header note:** OG FASTA headers follow the pattern `>g009075.m1|aspergillus_nidulans.final`.
+> The species list must contain the `*.final` IDs — the portion after the pipe.
+
+```{bash subset-fastas, eval=FALSE}
+# og_fastas_267.sh — run from project root
+bash scripts/og_fastas_267.sh
+
+# Verify outputs
+ls -1 data/processed/03_ml_orthogroups/05_og_fastas_267/*.fasta | wc -l
+head -n 20 data/processed/03_ml_orthogroups/logs/og_counts_267.tsv
+```
+
+```{r subset-qc, eval=FALSE}
+# QC: Check sequence counts per OG after subsetting
+counts <- read.table(
+  "data/processed/03_ml_orthogroups/logs/og_counts_267.tsv",
+  header = TRUE, sep = "\t"
+)
+
+counts |>
+  arrange(Nseq_267) |>
+  kable(caption = "Sequence counts per orthogroup after subsetting to 267 species") |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+### Step B — Multiple Sequence Alignment (MAFFT)
+
+Each orthogroup is aligned independently. OGs with fewer than 3 sequences are skipped.
+
+| OG size | MAFFT mode | Rationale |
+|---------|-----------|-----------|
+| ≤ 200 sequences | `--localpair --maxiterate 1000` (L-INS-i) | High accuracy |
+| > 200 sequences | `--auto` (FFT-NS-2) | Scalable; guide trees built twice |
+
+```{bash mafft-run, eval=FALSE}
+bash scripts/mafft_run.sh
+
+# Verify
+ls -1 data/processed/03_ml_orthogroups/06_alignments/*.aln.fasta | wc -l
+tail -n 20 data/processed/03_ml_orthogroups/logs/mafft_run.log
+```
+
+### Step C — Alignment Trimming (TrimAl)
+
+`trimal -automated1` adapts trimming thresholds per alignment — ideal for a batch
+pipeline across OGs with widely varying length, divergence, and gap patterns. This
+removes noisy columns introduced by the fast FFT-NS-2 aligner used on large OGs.
+
+```{bash trimal-run, eval=FALSE}
+bash scripts/trim_align.sh
+
+# Verify
+ls -1 data/processed/03_ml_orthogroups/07_trimmed_alignments/*.trim.aln.fasta | wc -l
+tail -n 20 data/processed/03_ml_orthogroups/logs/trimal_run.log
+```
+
+### Step D — Local IQ-TREE Validation Test
+
+A local IQ-TREE run validates the preprocessing pipeline on one orthogroup before
+committing to the full cluster batch. Full model selection and tree inference for
+all 9 OGs runs on the cluster (Phase 1–2).
+
+```{bash iqtree-local, eval=FALSE}
+bash scripts/iqtree_run.sh
+
+ls -lah data/processed/03_ml_orthogroups/08_gene_trees/
+tail -n 20 data/processed/03_ml_orthogroups/logs/iqtree_run.log
+```
+
+---
+
+## Cluster Analysis Pipeline (GLBRC HT Condor)
+
+```
+Phase 1  —  Model Selection + IQ-TREE gene trees  (Condor, 9 parallel jobs, ~2 hrs)
+Phase 2a —  ML Trees (RAxML-NG)                   (Condor, 9 parallel jobs, ~2 hrs each)
+Phase 2b —  Bayesian Trees (BEAST2)               (Condor, 9 parallel jobs, ~24 hrs each)
+Phase 2c —  Species Tree (ASTRAL)                 (submit node, after Phase 2a, ~minutes)
+Phase 3  —  D-statistic                           (submit node, after Phase 2)
+```
+
+> **Phase 1 produces two outputs used downstream:**
+> 1. `jobs_with_models.txt` — best-fit model per OG, passed directly to RAxML-NG (`--model`) in Phase 2a
+> 2. `iqtree_logs/OG*.trim.aln_model.treefile` — IQ-TREE ML gene trees, used as BEAST2 starting trees in Phase 2b (via `generate_beast_xml.py`)
+
+### Phase 1 — Model Selection (IQ-TREE ModelFinder, Condor parallel)
+
+All 9 OGs are submitted simultaneously. Runtime: ~1.5 hrs (vs. ~13 hrs serial).
+
+```{bash phase1-submit, eval=FALSE}
+conda activate phylo_env
+cd /home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_Path_563
+
+# Generate alignment job list
+ls data/OG*.trim.aln.fasta | xargs -n1 basename > scripts/modelfinder_jobs.txt
+cat scripts/modelfinder_jobs.txt    # verify all 9 OGs listed
+
+# Submit all 9 ModelFinder jobs simultaneously
+condor_submit scripts/modelfinder_jobs.sub
+condor_q                            # monitor — wait for all jobs to complete
+
+# After completion: collect best models
+bash scripts/collect_models.sh
+cat scripts/jobs_with_models.txt    # verify all 9 models present
+```
+
+```{r phase1-results}
+# Display completed model selection results
+models <- data.frame(
+  Orthogroup = c("OG0000007","OG0000008","OG0000009","OG0000020",
+                 "OG0000029","OG0000032","OG0000044","OG0000067","OG0007179"),
+  Best_Model = c("Q.YEAST+F+R10","LG+F+R10","LG+R10","Q.YEAST+R10",
+                 "LG+F+R9","LG+F+R9","LG+F+R10","LG+F+R9","REMOVED"),
+  Notes = c(
+    "Yeast-specific matrix + empirical freqs + 10 FreeRate categories",
+    "General LG + empirical freqs + 10 FreeRate categories",
+    "General LG + 10 FreeRate categories",
+    "Yeast-specific matrix + 10 FreeRate categories",
+    "General LG + empirical freqs + 9 FreeRate categories",
+    "General LG + empirical freqs + 9 FreeRate categories",
+    "General LG + empirical freqs + 10 FreeRate categories",
+    "General LG + empirical freqs + 9 FreeRate categories",
+    "No outgroup (Lipomyces starkeyi absent); < 4 genes; excluded"
+  )
+)
+
+models |>
+  kable(col.names = c("Orthogroup", "Best Model (BIC)", "Model Components"),
+        caption = "IQ-TREE ModelFinder results — best-fit substitution models (BIC criterion)") |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE) |>
+  row_spec(which(models$Orthogroup == "OG0007179"),
+           color = "grey", italic = TRUE)
+```
+
+### Phase 2a — Maximum Likelihood Trees (RAxML-NG)
+
+Each job: 10 CPUs, 8 GB RAM. Settings: 10 parsimony + 10 random starting trees,
+1,000 bootstrap replicates, per-OG model from `jobs_with_models.txt`, seed `12345`.
+
+```{bash phase2a-submit, eval=FALSE}
+cat scripts/jobs_with_models.txt        # confirm all 8 models present
+
+condor_submit scripts/raxml_jobs.sub    # submit all 8 ML jobs
+condor_q                                # monitor
+```
+
+```{r phase2a-check, eval=file.exists("results")}
+# Check which RAxML result files exist
+raxml_files <- list.files("results", pattern = "\\.raxml\\.support$", full.names = FALSE)
+
+if (length(raxml_files) > 0) {
+  cat(sprintf("Found %d RAxML support tree(s):\n", length(raxml_files)))
+  cat(paste0("  ", raxml_files, "\n"))
+} else {
+  cat("No RAxML support trees found yet in results/ — check condor_q\n")
+}
+```
+
+### Phase 2c — Species Tree Inference (ASTRAL)
+
+ASTRAL (run via the `aster` conda package) estimates a multi-species coalescent
+species tree from the individual RAxML gene trees. It uses the `.raxml.bestTree`
+files (unrooted, no bootstrap labels) rather than `.raxml.support`, because ASTRAL
+uses branch lengths in coalescent units and support values on node labels would be
+misread as taxon names.
+
+This is the **coalescent-based counterpart** to the concatenation approach. While
+RAxML and BEAST2 treat all genes as a single locus, ASTRAL explicitly models
+incomplete lineage sorting (ILS) — gene tree discordance caused by deep ancestral
+polymorphism — and is more appropriate when your gene trees show significant
+topological conflict with each other.
+
+```{bash astral-submit, eval=FALSE}
+conda activate phylo_env
+
+# Confirm ASTRAL is installed (from the aster package)
+astral --help 2>&1 | head -n 3
+
+# Run ASTRAL on all RAxML best trees
+bash scripts/run_astral.sh
+
+# Species tree written to: results/astral/astral_species_tree.tre
+cat results/astral/astral_species_tree.tre
+```
+
+```{r astral-check, eval=file.exists("results/astral/astral_species_tree.tre")}
+# Load and summarise the ASTRAL species tree
+astral_tree <- read.tree("results/astral/astral_species_tree.tre")
+
+cat(sprintf("ASTRAL species tree loaded\n"))
+cat(sprintf("  Tips:       %d\n", length(astral_tree$tip.label)))
+cat(sprintf("  Rooted:     %s\n", is.rooted(astral_tree)))
+cat(sprintf("  Ultrametric:%s\n", is.ultrametric(astral_tree)))
+```
+
+```{r astral-plot, eval=file.exists("results/astral/astral_species_tree.tre")}
+astral_tree <- read.tree("results/astral/astral_species_tree.tre")
+
+# Basic ASTRAL species tree plot
+plot(astral_tree,
+     type       = "phylogram",
+     cex        = 0.35,
+     no.margin  = TRUE,
+     main       = "ASTRAL multi-species coalescent tree")
+```
+
+```{r gene-tree-concordance, eval=file.exists("results") && file.exists("results/astral/astral_species_tree.tre")}
+# Compare gene tree topologies to the ASTRAL species tree
+raxml_trees <- lapply(
+  list.files("results", pattern = "\\.raxml\\.bestTree$", full.names = TRUE),
+  read.tree
+)
+
+if (length(raxml_trees) > 1) {
+  # Count how many gene trees match the species tree topology on each node
+  # (basic concordance check using Robinson-Foulds distances)
+  rf_distances <- sapply(raxml_trees, function(gt) {
+    tryCatch(RF.dist(astral_tree, gt, normalize = TRUE), error = function(e) NA)
+  })
+
+  og_names <- sub(".*/(OG[^.]+).*", "\\1",
+                  list.files("results", pattern = "\\.raxml\\.bestTree$",
+                             full.names = TRUE))
+
+  rf_df <- data.frame(
+    Orthogroup = og_names,
+    RF_distance_normalised = round(rf_distances, 3),
+    Concordance = ifelse(rf_distances < 0.2, "High",
+                  ifelse(rf_distances < 0.5, "Moderate", "Low"))
+  )
+
+  rf_df |>
+    kable(caption = "Normalised Robinson-Foulds distance: each gene tree vs. ASTRAL species tree
+          (0 = identical topology, 1 = maximally discordant)") |>
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) |>
+    column_spec(3,
+                color = ifelse(rf_df$Concordance == "High",   "#1a9850",
+                        ifelse(rf_df$Concordance == "Moderate","#f46d43", "#d73027")))
+}
+```
+
+### Phase 2b — Bayesian Inference (BEAST2)
+
+Runs in parallel with Phase 2a. Settings: relaxed lognormal clock, Birth-Death
+tree prior, 50 million MCMC steps, 2 independent runs per OG for convergence checking.
+
+**MRCA Calibration Priors** (from Shen et al. 2018, Table S2):
+
+```{r mrca-table}
+mrca <- data.frame(
+  Anchor = c("Deep", "Medium", "Young"),
+  Taxa_Pair = c(
+    "Babjeviella inositovora & Pachysolen tannophilus",
+    "Zygosaccharomyces rouxii & Z. kombuchaensis",
+    "Kazachstania siamensis & K. unispora"
+  ),
+  Mean_Ma = c(224.70, 36.90, 17.27),
+  Lower_Ma = c(190.09, 22.98, 12.36),
+  Upper_Ma = c(265.39, 51.96, 23.83)
+)
+
+mrca |>
+  kable(col.names = c("Anchor", "Taxa Pair", "Mean (Ma)", "Lower (Ma)", "Upper (Ma)"),
+        caption = "MRCA calibration priors for BEAST2 molecular clock (Shen et al. 2018)") |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE)
+```
+
+```{bash phase2b-submit, eval=FALSE}
+# Step 1: Generate XML configs (2 runs per OG)
+python3 scripts/generate_beast_xml.py
+
+# Step 2: Manually inject MRCA calibration priors into each beast_xml/*.xml
+# (see README for XML code blocks)
+
+# Step 3: Generate job list and submit
+ls beast_xml/*.xml | xargs -n1 basename | sed 's/\.xml//' > scripts/beast_jobs.txt
+condor_submit scripts/beast_jobs.sub
+condor_q    # monitor — expect ~24 hrs per job
+
+# Step 4: After jobs complete — check convergence in Tracer (ESS > 200)
+# Step 5: Summarize posterior trees
+for f in results/beast/*.trees; do
+  og=$(basename $f .trees)
+  treeannotator -burnin 10 $f results/beast/${og}.beast.tree
+done
+```
+
+---
+
+## Phase 3 — D-statistic Analysis
+
+The D-statistic (Fritz & Purvis 2010) is calculated using `caper::phylo.d()` in R —
+the same method used in the Y1000+ paper. It measures whether mannose growth
+is phylogenetically structured or randomly distributed across gene trees.
+
+### Load and Validate Trait Data
+
+```{r load-traits}
+traits_file <- "data/mannose_traits.csv"
+
+if (!file.exists(traits_file)) {
+  stop("Trait file not found: place mannose_traits.csv in data/ before running Phase 3.")
+}
+
+trait_data <- read.table(traits_file,
+                         header = TRUE, sep = "\t",
+                         stringsAsFactors = FALSE,
+                         quote = "", comment.char = "")
+
+# Validate required columns
+required_cols <- c("Species", "Species_name_in_OGs", "Mannose_Class")
+missing_cols  <- required_cols[!required_cols %in% colnames(trait_data)]
+if (length(missing_cols) > 0) {
+  stop(paste("Missing columns:", paste(missing_cols, collapse = ", ")))
+}
+
+# Validate binary trait
+invalid <- unique(trait_data$Mannose_Class)[!unique(trait_data$Mannose_Class) %in% c(0, 1)]
+if (length(invalid) > 0) {
+  stop(paste("Non-binary values in Mannose_Class:", paste(invalid, collapse = ", ")))
+}
+
+cat(sprintf("Species loaded:       %d\n", nrow(trait_data)))
+cat(sprintf("Mannose growers (1):  %d\n", sum(trait_data$Mannose_Class == 1)))
+cat(sprintf("Non-growers (0):      %d\n", sum(trait_data$Mannose_Class == 0)))
+```
+
+### Load Gene Trees
+
+```{r load-trees, eval=file.exists("results")}
+raxml_trees <- list.files("results",
+                          pattern    = "\\.raxml\\.support$",
+                          full.names = TRUE)
+beast_trees <- list.files(file.path("results", "beast"),
+                          pattern    = "\\.beast\\.tree$",
+                          full.names = TRUE)
+
+all_trees <- c(
+  setNames(raxml_trees,
+           paste0(sub(".*/(OG[^.]+).*", "\\1", raxml_trees), "_ML")),
+  setNames(beast_trees,
+           paste0(sub(".*/(OG[^.]+).*", "\\1", beast_trees), "_Bayesian"))
+)
+
+cat(sprintf("Tree files found: %d\n", length(all_trees)))
+for (nm in names(all_trees)) cat(sprintf("  %s\n", nm))
+```
+
+### Calculate D-statistic
+
+```{r d-statistic, eval=file.exists("results")}
+set.seed(42)
+
+# Helper: interpret D value
+interpret_d <- function(D, p_random, p_brownian) {
+  if (is.na(D))             return("FAILED")
+  if (p_random > 0.05)      return("No significant phylogenetic signal (p > 0.05)")
+  if (D < 0)                return("Highly clustered — stronger than Brownian motion")
+  if (D < 0.5)              return("Clustered — strong phylogenetic signal")
+  if (D < 1.0)              return("Moderate phylogenetic signal")
+  if (abs(D - 1.0) < 0.1)  return("Random — no phylogenetic signal")
+  return("Overdispersed — convergent evolution")
+}
+
+results <- list()
+
+for (tree_name in names(all_trees)) {
+  tree_file <- all_trees[[tree_name]]
+  og        <- sub("_(ML|Bayesian)$", "", tree_name)
+  tree_type <- sub(".*_(ML|Bayesian)$", "\\1", tree_name)
+
+  cat(sprintf("\n── %s (%s) ──────────────────────\n", og, tree_type))
+
+  # Load tree
+  tree <- tryCatch(read.tree(tree_file),
+                   error = function(e) { cat("  ERROR reading tree\n"); NULL })
+  if (is.null(tree)) next
+
+  # Make binary and ultrametric
+  if (!is.binary(tree))     tree <- multi2di(tree)
+  if (!is.ultrametric(tree)) {
+    tree <- tryCatch(chronos(tree, quiet = TRUE),
+                     error = function(e) chronos(tree, model = "correlated", quiet = TRUE))
+  }
+
+  # Match trait names to tree tips
+  csv_names   <- trait_data$Species_name_in_OGs
+  n_matched   <- sum(csv_names %in% tree$tip.label)
+  pct_matched <- round(100 * n_matched / length(csv_names), 1)
+
+  cat(sprintf("  Tree tips:   %d | CSV species: %d | Matched: %d (%.1f%%)\n",
+              length(tree$tip.label), length(csv_names), n_matched, pct_matched))
+
+  if (n_matched < 10) {
+    cat("  SKIPPED — fewer than 10 matched taxa\n")
+    next
+  }
+
+  # Build comparative data
+  named_trait  <- setNames(as.integer(trait_data$Mannose_Class),
+                            trait_data$Species_name_in_OGs)
+  matched_obj  <- tryCatch(match.phylo.data(tree, named_trait), error = function(e) NULL)
+  if (is.null(matched_obj)) next
+
+  comp_df <- data.frame(og_name = names(matched_obj$data),
+                        mannose = as.integer(matched_obj$data),
+                        row.names = names(matched_obj$data),
+                        stringsAsFactors = FALSE)
+
+  comp_data <- tryCatch(
+    comparative.data(phy = matched_obj$phy, data = comp_df,
+                     names.col = "og_name", vcv = TRUE, warn.dropped = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(comp_data)) next
+
+  # Run D-statistic
+  d_result <- tryCatch(
+    phylo.d(data = comp_data, binvar = mannose, permut = 1000),
+    error = function(e) NULL
+  )
+  if (is.null(d_result)) next
+
+  D_val      <- d_result$DEstimate
+  p_random   <- d_result$Pval1
+  p_brownian <- d_result$Pval0
+
+  cat(sprintf("  D = %.4f | p(random) = %.4f | p(Brownian) = %.4f\n",
+              D_val, p_random, p_brownian))
+  cat(sprintf("  → %s\n", interpret_d(D_val, p_random, p_brownian)))
+
+  results[[tree_name]] <- data.frame(
+    Orthogroup    = og,
+    Tree_Type     = tree_type,
+    N_Tips        = length(tree$tip.label),
+    N_Matched     = n_matched,
+    Pct_Matched   = pct_matched,
+    D             = round(D_val, 4),
+    p_random      = round(p_random, 4),
+    p_brownian    = round(p_brownian, 4),
+    Interpretation = interpret_d(D_val, p_random, p_brownian),
+    stringsAsFactors = FALSE
+  )
+}
+```
+
+### Results Summary
+
+```{r results-table, eval=exists("results") && length(results) > 0}
+results_df <- do.call(rbind, results)
+rownames(results_df) <- NULL
+
+# Write to file
+write.table(results_df, "results/dstatistic_results.tsv",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+cat("Results written to: results/dstatistic_results.tsv\n")
+
+# Display
+results_df |>
+  select(Orthogroup, Tree_Type, N_Matched, Pct_Matched, D, p_random, p_brownian) |>
+  kable(caption = "D-statistic results — phylogenetic signal for mannose growth trait",
+        digits = 4) |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE) |>
+  column_spec(5, bold = TRUE,
+              color = ifelse(results_df$D < 0, "#d73027",
+                      ifelse(results_df$D > 1, "#4575b4", "black")))
+```
+
+### D-statistic Visualisation
+
+```{r d-plot, eval=exists("results_df") && nrow(results_df) > 0}
+ggplot(results_df, aes(x = Orthogroup, y = D, colour = Tree_Type, shape = Tree_Type)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.6) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey70", linewidth = 0.6) +
+  geom_point(size = 4, alpha = 0.85) +
+  annotate("text", x = Inf, y = 0,  label = "D=0 (Brownian)",
+           hjust = 1.05, vjust = -0.4, size = 3, colour = "grey40") +
+  annotate("text", x = Inf, y = 1,  label = "D=1 (Random)",
+           hjust = 1.05, vjust = -0.4, size = 3, colour = "grey70") +
+  scale_colour_manual(values = c(ML = "#4575b4", Bayesian = "#d73027")) +
+  labs(title = "D-statistic per orthogroup",
+       subtitle = "Phylogenetic signal for mannose growth trait",
+       x = "Orthogroup", y = "D-statistic",
+       colour = "Tree type", shape = "Tree type") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold"),
+        legend.position = "top")
+```
+
+---
+
+## D-statistic Interpretation Guide
+
+```{r interp-table, echo=FALSE}
+interp <- data.frame(
+  D_Value = c("D < 0", "D = 0", "0 < D < 1", "D = 1", "D > 1"),
+  Biological_Interpretation = c(
+    "Highly clustered — stronger signal than Brownian motion",
+    "Brownian motion — strong phylogenetic signal",
+    "Moderate phylogenetic signal",
+    "Random — no phylogenetic signal",
+    "Overdispersed — convergent evolution"
+  )
+)
+
+interp |>
+  kable(col.names = c("D value", "Biological interpretation"),
+        caption = "D-statistic interpretation (Fritz & Purvis 2010)") |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) |>
+  row_spec(1, background = "#fee8c8") |>
+  row_spec(2, background = "#e0f3db") |>
+  row_spec(5, background = "#deebf7")
+```
+
+**P-value guide:**
+
+- `p(random) < 0.05` → trait is non-randomly distributed (phylogenetic signal present)
+- `p(Brownian) < 0.05` → trait deviates from Brownian motion evolution
+
+> **Note:** D-statistic on gene trees identifies which orthogroups are *associated*
+> with mannose growth. D on the species tree (planned) asks whether mannose growth
+> is broadly conserved across all 267 species.
+
+---
+
+## Planned Next Analyses
+
+```{r next-steps, echo=FALSE}
+next_steps <- data.frame(
+  Step = 1:7,
+  Analysis = c(
+    "ASTRAL species-tree inference from ML gene trees",
+    "Per-site conservation scoring",
+    "Grower vs. non-grower enrichment tests",
+    "Gene family presence/absence modelling",
+    "Ancestral state reconstruction",
+    "Mannose metabolism pathway mapping",
+    "Genome alignment (pygenomeviz/progressiveMauve vs. Cactus)"
+  ),
+  Status = c("Integrated (Phase 2c)","Pending","Pending","Pending","Pending","Pending","In progress")
+)
+
+next_steps |>
+  kable(caption = "Planned downstream analyses") |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) |>
+  column_spec(3, color = ifelse(next_steps$Status == "In progress", "#e08214", "grey50"))
+```
+
+---
+
+## Reproducibility
+
+```{r session-info}
+sessionInfo()
+```
+
+```{r tool-versions, eval=FALSE}
+# Run on the cluster to capture tool versions
+system("mafft --version")
+system("trimal -h 2>&1 | head -n 2")
+system("iqtree3 --version 2>&1 | head -n 2")
+system("raxml-ng --version 2>&1 | head -n 2")
+```
+
+---
+
+*Project: PLANTPATH 563 | GLBRC scarcity-ap-1 | Conda env: `phylo_env` | Last updated: March 2026*
