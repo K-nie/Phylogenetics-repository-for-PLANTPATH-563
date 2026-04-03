@@ -1,4 +1,5 @@
 #!/bin/bash
+# Author:Benjamin Narh-Madey
 # run_beast_job.sh
 # Condor job script: runs BEAST2 Bayesian inference for a single orthogroup.
 # Called by beast_jobs.sub with one argument:
