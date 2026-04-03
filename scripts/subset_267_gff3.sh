@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#Author:Benjamin Narh-Madey
 set -eo pipefail   # no 'u' → avoids unbound variable errors
 
 # ──────────────────────────────────────────────────────────────────────────────
