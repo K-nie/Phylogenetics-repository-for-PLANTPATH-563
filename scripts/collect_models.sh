@@ -1,5 +1,6 @@
 #!/bin/bash
 # collect_models.sh
+# Author:Benjamin Narh-Madey
 # Runs on the submit node AFTER all ModelFinder Condor jobs complete.
 # Scans iqtree_logs/ for best-fit models and writes jobs_with_models.txt
 # which is then used by raxml_jobs.sub and beast_jobs.sub.
