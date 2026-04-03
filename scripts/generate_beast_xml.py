@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+Author:Benjamin Narh-Madey
 generate_beast_xml.py
 Generates BEAST2 XML configuration files per orthogroup alignment.
 UPGRADED: Dynamically matches IQ-TREE models and generates 2 runs per orthogroup.
