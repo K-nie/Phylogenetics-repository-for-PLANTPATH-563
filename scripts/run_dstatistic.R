@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+# Author:Benjamin Narh-Madey
 # run_dstatistic.R
 # Calculates phylogenetic signal D-statistic for binary mannose trait
 # across gene trees produced by RAxML-NG and/or BEAST2.
