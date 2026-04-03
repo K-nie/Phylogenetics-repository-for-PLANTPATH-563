@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#Author:Benjamin Narh-Madey
 set -euo pipefail
 
 # Paths
