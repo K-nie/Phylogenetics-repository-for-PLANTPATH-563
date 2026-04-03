@@ -1,7 +1,8 @@
 #!/bin/bash
+# Author:Benjamin Narh-Madey
 # run_modelfinder_job.sh
 # Condor job script: runs IQ-TREE ModelFinder for a single orthogroup.
-#Author:Benjamin Narh-Madey
+#
 set -euo pipefail
 
 FILENAME="$1"
