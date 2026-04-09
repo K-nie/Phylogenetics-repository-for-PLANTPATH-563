@@ -3,7 +3,7 @@
 # run_beast_job.sh
 # Condor job script: runs BEAST2 Bayesian inference for a single orthogroup.
 # Called by beast_jobs.sub with one argument:
-#   $1 = orthogroup name (e.g. OG0000007)
+#   $1 = orthogroup name (e.g. OG0000007_run1)
 #
 # Settings: Relaxed lognormal clock + Birth-Death tree prior + 50M MCMC
 #Author:Benjamin Narh-Madey
@@ -16,7 +16,7 @@ OG_NAME="$1"
 
 if [ -z "$OG_NAME" ]; then
     echo "ERROR: Usage: run_beast_job.sh <og_name>"
-    echo "       e.g.   run_beast_job.sh OG0000007"
+    echo "       e.g.   run_beast_job.sh OG0000007_run1"
     exit 1
 fi
 
@@ -92,19 +92,15 @@ echo "=== Copying results to $RESULTS_DIR ==="
 mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
 
 # Core BEAST2 output files
-# generate_beast_xml.py names files as {OG_NAME}_{run_id}.trace.log / .trees
-# The run_id is embedded in the XML passed to this job — match by glob
+# OG_NAME is the full run identifier (e.g. OG0000007_run1)
+# BEAST2 names output files as ${OG_NAME}.trace.log and ${OG_NAME}.trees
 for EXT in trace.log trees; do
-    for SRC in "${OG_NAME}"_run*.${EXT}; do
-        if [ -f "$SRC" ]; then
-            cp "$SRC" "$RESULTS_DIR/"
-            echo "  Copied: $SRC"
-        fi
-    done
-    # Warn only if nothing matched at all
-    found=$(ls "${OG_NAME}"_run*.${EXT} 2>/dev/null | wc -l)
-    if [ "$found" -eq 0 ]; then
-        echo "  Warning: no ${OG_NAME}_run*.${EXT} files found"
+    SRC="${OG_NAME}.${EXT}"
+    if [ -f "$SRC" ]; then
+        cp "$SRC" "$RESULTS_DIR/"
+        echo "  Copied: $SRC"
+    else
+        echo "  Warning: $SRC not found in scratch"
     fi
 done
 
