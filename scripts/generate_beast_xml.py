@@ -38,6 +38,26 @@ LOG_EVERY     = 5_000        # log every 5000 steps → 10000 samples total
 TRACE_EVERY   = 5_000
 TREE_EVERY    = 5_000
 
+# ── IQ-TREE → BEAST2 substitution model mapping ───────────────────────────────
+# IQ-TREE uses model names that are not valid BEAST2 class names.
+# Map to the closest supported BEAST2 amino acid substitution model.
+# BEAST2 2.6.3 built-in AA models: WAG, JTT, Blosum62, Dayhoff, CPREV, MTREV,
+#   MTART, HIVb, HIVw. LG and Q.* matrices require external packages.
+BEAST2_MODEL_MAP = {
+    "WAG":      "WAG",
+    "LG":       "WAG",       # LG not in standard BEAST2 2.6.3; WAG is closest
+    "JTT":      "JTT",
+    "JTTDCMUT": "JTT",
+    "DAYHOFF":  "Dayhoff",
+    "DCMUT":    "Dayhoff",
+    "BLOSUM62": "Blosum62",
+    "CPREV":    "CPREV",
+    "MTREV":    "MTREV",
+    "MTART":    "MTART",
+    "HIVB":     "HIVb",
+    "HIVW":     "HIVw",
+}
+
 
 def read_alignment(fasta_path):
     """Read alignment and return list of (taxon, sequence) tuples."""
@@ -46,26 +66,26 @@ def read_alignment(fasta_path):
 
 
 def read_models(model_filepath):
-    """Parse jobs_with_models.txt to map orthogroups to their best models."""
+    """Parse jobs_with_models.txt to map orthogroups to BEAST2-compatible models."""
     og_models = {}
     if not model_filepath.exists():
         print(f"WARNING: Model file {model_filepath} not found. Defaulting all to WAG.")
         return og_models
-        
+
     with open(model_filepath, "r") as f:
         for line in f:
             line = line.strip()
             if line:
                 parts = line.split()
                 if len(parts) >= 2:
-                    # Clean filename to get just the OG name
                     og = parts[0].replace(".trim.aln.fasta", "").replace(".fasta", "")
-                    
-                    # IQ-TREE models look like "LG+F+G4" or "Q.YEAST+I+R4"
-                    # We just need the base matrix name (before the first '+')
                     full_model = parts[1]
-                    base_model = full_model.split('+')[0]
-                    og_models[og] = base_model
+                    base_model = full_model.split("+")[0].upper()
+                    # Map IQ-TREE model name to a valid BEAST2 class; default WAG
+                    beast2_model = BEAST2_MODEL_MAP.get(base_model, "WAG")
+                    if beast2_model == "WAG" and base_model not in BEAST2_MODEL_MAP:
+                        print(f"  NOTE: {base_model} not in BEAST2 model map — using WAG")
+                    og_models[og] = beast2_model
     return og_models
 
 
@@ -169,11 +189,8 @@ def generate_xml(og_name, taxa_seqs, base_model, run_id, out_path, starting_newi
                        lower="0.0" name="stateNode">0.001</parameter>
             <parameter id="ucldSdev.c:{og_name}"
                        lower="0.0" name="stateNode" upper="10.0">0.1</parameter>
-            <parameter id="rateCategories.c:{og_name}"
+            <parameter id="rateCategories.c:{og_name}" spec="parameter.IntegerParameter"
                        dimension="{2 * n_taxa - 2}" name="stateNode">1</parameter>
-
-            <parameter id="freqParameter.s:{og_name}"
-                       dimension="20" lower="0.0" name="stateNode" upper="1.0">0.05</parameter>
 
             <parameter id="gammaShape.s:{og_name}"
                        lower="0.0" name="stateNode">0.5</parameter>
@@ -232,8 +249,7 @@ def generate_xml(og_name, taxa_seqs, base_model, run_id, out_path, starting_newi
                                gammaCategoryCount="4"
                                shape="@gammaShape.s:{og_name}">
                         <substModel id="{base_model}.s:{og_name}"
-                                    spec="{base_model}"
-                                    frequencies="@freqParameter.s:{og_name}"/>
+                                    spec="{base_model}"/>
                     </siteModel>
 
                     <branchRateModel id="RelaxedClock.c:{og_name}"
@@ -352,12 +368,12 @@ def main():
 
     for aln_path in alignments:
         og_name = aln_path.name.replace(".trim.aln.fasta", "").replace(".fasta", "")
-        
-        # 2. Get the specific model (default to WAG if missing from text file)
+
+        # 2. Get the specific model mapped to a valid BEAST2 class (default WAG)
         base_model = og_models.get(og_name, "WAG")
-        
+
         print(f"  Processing {og_name} (Model: {base_model})...")
-        
+
         try:
             taxa_seqs = read_alignment(aln_path)
 
@@ -374,7 +390,7 @@ def main():
 
                 generate_xml(og_name, taxa_seqs, base_model, run, out_path, starting_newick)
                 print(f"    Written: {out_path.name}  ({len(taxa_seqs)} taxa)")
-                
+
         except Exception as e:
             print(f"  ERROR processing {og_name}: {e}")
 
