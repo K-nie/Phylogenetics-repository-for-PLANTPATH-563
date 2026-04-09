@@ -333,7 +333,7 @@ def generate_xml(og_name, taxa_seqs, base_model, run_id, out_path, starting_newi
             <parameter idref="gammaShape.s:{og_name}" name="log"/>
             <log id="rate.c:{og_name}"
                  spec="beast.evolution.branchratemodel.RateStatistic"
-                 branchRateModel="@RelaxedClock.c:{og_name}"
+                 branchratemodel="@RelaxedClock.c:{og_name}"
                  tree="@Tree.t:{og_name}"/>
         </logger>
 
