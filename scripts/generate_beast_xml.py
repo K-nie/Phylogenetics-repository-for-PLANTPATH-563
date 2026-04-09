@@ -29,7 +29,6 @@ BASE_DIR    = Path("/home/glbrc.org/narhmadey/2.Y1000_267_phylogenetics/2_Plant_
 ALIGN_DIR   = BASE_DIR / "data"
 XML_DIR     = BASE_DIR / "beast_xml"
 MODEL_FILE  = BASE_DIR / "scripts" / "jobs_with_models.txt"  # per-OG IQ-TREE models
-IQTREE_LOGS = BASE_DIR / "iqtree_logs"                       # IQ-TREE Phase 1 output
 XML_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── BEAST2 settings ───────────────────────────────────────────────────────────
@@ -106,38 +105,14 @@ def make_taxon_block(taxa_seqs):
     return "\n".join(lines)
 
 
-def read_iqtree_starting_tree(og_name):
+def make_init_block(og_name):
     """
-    Read the IQ-TREE ML tree produced in Phase 1 (-m MFP) for use as
-    a BEAST2 starting tree. This improves MCMC convergence by starting
-    from a reasonable topology rather than a random tree.
-    Returns the Newick string if found, or None to fall back to RandomTree.
+    Generate a RandomTree initialisation block.
+    TreeParser is avoided because IQ-TREE branch lengths (substitutions/site)
+    are misinterpreted as time by BEAST2's adjustTipHeights, and internal node
+    bootstrap labels cause taxon/node count mismatches.
     """
-    treefile = IQTREE_LOGS / f"{og_name}.trim.aln_model.treefile"
-    if treefile.exists():
-        with open(treefile) as f:
-            newick = f.read().strip()
-        if newick:
-            print(f"    Using IQ-TREE starting tree from: {treefile.name}")
-            return newick
-    print(f"    No IQ-TREE treefile found for {og_name} — using RandomTree initialiser")
-    return None
-
-
-def make_init_block(og_name, taxa_seqs, starting_newick):
-    """
-    Generate the BEAST2 tree initialisation block.
-    - If an IQ-TREE ML tree is available, use TreeParser with the Newick string.
-      This seeds BEAST2 from a good starting topology, reducing burn-in.
-    - Otherwise fall back to a random coalescent tree (ConstantPopulation model).
-    """
-    if starting_newick:
-        return f"""        <init estimate="false" id="RandomTree.t:{og_name}"
-              initial="@Tree.t:{og_name}" spec="beast.util.TreeParser"
-              taxa="@{og_name}" IsLabelledNewick="true"
-              newick="{starting_newick}"/>"""
-    else:
-        return f"""        <init estimate="false" id="RandomTree.t:{og_name}"
+    return f"""        <init estimate="false" id="RandomTree.t:{og_name}"
               initial="@Tree.t:{og_name}" spec="beast.evolution.tree.RandomTree"
               taxa="@{og_name}">
             <populationModel spec="beast.evolution.tree.coalescent.ConstantPopulation"
@@ -145,12 +120,12 @@ def make_init_block(og_name, taxa_seqs, starting_newick):
         </init>"""
 
 
-def generate_xml(og_name, taxa_seqs, base_model, run_id, out_path, starting_newick=None):
+def generate_xml(og_name, taxa_seqs, base_model, run_id, out_path):
     """Generate complete BEAST2 XML for one orthogroup."""
     n_taxa      = len(taxa_seqs)
     seq_block   = make_sequence_block(taxa_seqs)
     taxon_block = make_taxon_block(taxa_seqs)
-    init_block  = make_init_block(og_name, taxa_seqs, starting_newick)
+    init_block  = make_init_block(og_name)
 
     xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <beast beautitemplate="Standard" beautistatus="" namespace="beast.core:beast.evolution.alignment:beast.evolution.tree.coalescent:beast.core.util:beast.evolution.nuc:beast.evolution.operators:beast.evolution.sitemodel:beast.evolution.substitutionmodel:beast.evolution.likelihood" required="" version="2.6">
@@ -377,10 +352,7 @@ def main():
         try:
             taxa_seqs = read_alignment(aln_path)
 
-            # 3. Load IQ-TREE ML tree as BEAST2 starting tree (from Phase 1 -m MFP)
-            starting_newick = read_iqtree_starting_tree(og_name)
-
-            # 4. Generate two runs per orthogroup
+            # 3. Generate two runs per orthogroup
             for run in ["run1", "run2"]:
                 out_path = XML_DIR / f"{og_name}_{run}.xml"
 
@@ -388,7 +360,7 @@ def main():
                     print(f"    Skipping {og_name} {run} — XML already exists")
                     continue
 
-                generate_xml(og_name, taxa_seqs, base_model, run, out_path, starting_newick)
+                generate_xml(og_name, taxa_seqs, base_model, run, out_path)
                 print(f"    Written: {out_path.name}  ({len(taxa_seqs)} taxa)")
 
         except Exception as e:
