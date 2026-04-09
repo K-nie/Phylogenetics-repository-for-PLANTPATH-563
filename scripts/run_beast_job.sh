@@ -56,6 +56,7 @@ export LD_LIBRARY_PATH="$(pwd)/lib:$(pwd)/lib64:${LD_LIBRARY_PATH:-}"
 
 # Remap hardcoded conda paths to scratch location (required for Java apps like BEAST2)
 echo "=== Running conda-unpack to fix Java classpaths ==="
+chmod -R u+w . 2>/dev/null || true
 set +u
 source ./bin/activate
 conda-unpack
