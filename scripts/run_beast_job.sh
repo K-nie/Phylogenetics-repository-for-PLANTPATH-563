@@ -54,7 +54,14 @@ rm -f phylo_env.tar.gz
 export PATH="$(pwd)/bin:$PATH"
 export LD_LIBRARY_PATH="$(pwd)/lib:$(pwd)/lib64:${LD_LIBRARY_PATH:-}"
 
-# BEAST2 needs Java — use the one from the unpacked env
+# Remap hardcoded conda paths to scratch location (required for Java apps like BEAST2)
+echo "=== Running conda-unpack to fix Java classpaths ==="
+set +u
+source ./bin/activate
+conda-unpack
+set -u
+
+# Point Java to the unpacked env's JRE
 export JAVA_HOME="$(pwd)"
 BEAST_BIN="$(pwd)/bin/beast"
 
