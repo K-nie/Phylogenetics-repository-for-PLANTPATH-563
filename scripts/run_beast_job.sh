@@ -87,7 +87,7 @@ echo ""
 
 # We use -seed $RANDOM so Run 1 and Run 2 start at different points
 "$BEAST_BIN" \
-    -beagle_off \
+    -java \
     -threads "${OMP_NUM_THREADS:-4}" \
     -overwrite \
     -seed "$RANDOM_SEED" \
